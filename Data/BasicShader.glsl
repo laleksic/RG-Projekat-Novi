@@ -23,10 +23,14 @@ uniform sampler2D DiffuseTexture;
         vec2 TexCoords;
     } vertexData;
 
-    out vec4 color;
+    out vec4 Color;
 
     void main() {
-        color = texture(DiffuseTexture, vertexData.TexCoords);
+        vec4 color = texture(DiffuseTexture, vertexData.TexCoords);
         color *= vec4(vertexData.Color, 1);
+        if (color.a < 0.5) {
+            discard;
+        }
+        Color = color;
     }
 #endif
