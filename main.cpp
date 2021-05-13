@@ -113,6 +113,7 @@ public:
     }
     void NewFrame() {
         LastFrame = ThisFrame;
+        glfwPollEvents();
     }
     vec2 GetMousePosition() const {
         return ThisFrame.MousePosition;
@@ -407,7 +408,6 @@ int main(int argc, char** argv) {
     shader.Use();
     while (!glfwWindowShouldClose(window)) {
         input.NewFrame();
-        glfwPollEvents();
         if (input.WasWindowResized()) {
             printf("Boom\n");
             ivec2 dims = input.GetWindowSize();
