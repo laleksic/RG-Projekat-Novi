@@ -6,6 +6,7 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <glfw/glfw3.h>
 #include <array>
+#include <algorithm>
 using namespace glm;
 using namespace std;
 
@@ -47,8 +48,8 @@ public:
     }
     vec3 GetDirection() const {
         vec3 direction(0.0f, 0.0f, -1.0f);
-        direction = rotateY(direction, Yaw);
-        direction = rotateX(direction, Pitch);
+        direction = rotateX(direction, radians(Pitch));
+        direction = rotateY(direction, radians(Yaw));
         return direction;
     }
     mat4 GetViewMatrix() const {
@@ -59,9 +60,9 @@ public:
 
 class Input {
     struct {
-        array<bool, GLFW_KEY_LAST+1> KeyDown;
-        array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown;  
-        vec2 MousePosition;    
+        array<bool, GLFW_KEY_LAST+1> KeyDown = {false};
+        array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown = {false};  
+        vec2 MousePosition = vec2(0.0f);    
     } ThisFrame, LastFrame;
 
 public:
@@ -275,13 +276,32 @@ int main(int argc, char** argv) {
     glBindVertexArray(triangle.VertexArray);
     glUseProgram(shader.Program);
     while (!glfwWindowShouldClose(window)) {
+        input.NewFrame();
+        glfwPollEvents();
+
+        if (input.IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+            vec2 mouseDelta = input.GetMouseDelta();
+            const float MOUSE_SENSITIVITY = 0.1f;
+            camera.SetYaw(camera.GetYaw() - mouseDelta.x * MOUSE_SENSITIVITY);
+            camera.SetPitch(camera.GetPitch() - mouseDelta.y * MOUSE_SENSITIVITY);
+        }
+        
+        const float MOVEMENT_SPEED = 0.1f;
+        vec3 forward = camera.GetDirection();
+        vec3 right = rotateY(vec3(forward.x, 0.0f, forward.z), radians(-90.0f));
+        vec3 wishDirection(0.0f, 0.0f, 0.0f);
+        wishDirection += (input.IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
+        wishDirection += (input.IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
+        wishDirection += (input.IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
+        wishDirection += (input.IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
+        camera.SetPosition(camera.GetPosition() + wishDirection * MOVEMENT_SPEED);
+
         matrices.Model = mat4(1.0f);
         matrices.View = camera.GetViewMatrix();
         matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
         matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
         glProgramUniformMatrix4fv(shader.Program, shader.ModelViewProjection, 1, GL_FALSE, value_ptr(matrices.ModelViewProjection));
 
-        glfwPollEvents();
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         glDrawArrays(GL_TRIANGLES, 0, 3);
