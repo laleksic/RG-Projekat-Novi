@@ -7,6 +7,7 @@
 #include <glfw/glfw3.h>
 #include <array>
 #include <algorithm>
+#include <vector>
 using namespace glm;
 using namespace std;
 
@@ -110,6 +111,71 @@ public:
     }
 };
 
+class Mesh {
+    GLuint VertexArray;
+
+    // Attributes
+    GLuint PositionBuffer;
+    GLuint ColorBuffer;
+    
+    GLuint ElementBuffer;
+    GLsizei ElementCount;
+
+public:
+    vector<vec3> Positions;
+    vector<vec3> Colors;
+    vector<GLuint> Elements;
+
+    Mesh() {
+        glCreateVertexArrays(1, &VertexArray);
+        glCreateBuffers(1, &ElementBuffer);
+
+        // Attributes
+        glCreateBuffers(1, &PositionBuffer);
+        glCreateBuffers(1, &ColorBuffer);
+        glVertexArrayAttribFormat(VertexArray, 0, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribFormat(VertexArray, 1, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribBinding(VertexArray, 0, 0);
+        glVertexArrayAttribBinding(VertexArray, 1, 1);
+        glEnableVertexArrayAttrib(VertexArray, 0);
+        glEnableVertexArrayAttrib(VertexArray, 1);
+        glVertexArrayVertexBuffer(VertexArray, 0, PositionBuffer, 0, sizeof(Positions[0]));
+        glVertexArrayVertexBuffer(VertexArray, 1, ColorBuffer, 0, sizeof(Colors[0])); 
+
+        glVertexArrayElementBuffer(VertexArray, ElementBuffer);    
+    }   
+    ~Mesh() {
+        glDeleteVertexArrays(1, &VertexArray);
+        glDeleteBuffers(1, &PositionBuffer);
+        glDeleteBuffers(1, &ColorBuffer);
+    } 
+
+    void UploadToGPU() {
+        ElementCount = Elements.size();
+        const size_t VERTEX_COUNT = Positions.size();
+        
+        // Sanity checks
+        assert(Positions.size() == VERTEX_COUNT);
+        assert(Colors.size() == VERTEX_COUNT);
+        assert(Elements.size() % 3 == 0);
+        for (GLuint element: Elements) {
+            assert(element < VERTEX_COUNT);
+        }
+        // ---
+
+        // Attributes
+        glNamedBufferData(PositionBuffer, VERTEX_COUNT * sizeof(Positions[0]), Positions.data(), GL_STATIC_DRAW);
+        glNamedBufferData(ColorBuffer, VERTEX_COUNT * sizeof(Colors[0]), Colors.data(), GL_STATIC_DRAW);
+        
+        glNamedBufferData(ElementBuffer, ElementCount * sizeof(GLuint), Elements.data(), GL_STATIC_DRAW);
+    }
+
+    void Draw() {
+        glBindVertexArray(VertexArray);
+        glDrawElements(GL_TRIANGLES, ElementCount, GL_UNSIGNED_INT, 0);
+    }    
+};
+
 int main(int argc, char** argv) {
     glfwSetErrorCallback([](int code, const char *msg){
         fprintf(stdout, "GLFW error (%d): %s\n", code, msg);
@@ -150,37 +216,21 @@ int main(int argc, char** argv) {
             }
     }, 0);
 
-    struct {
-        GLuint VertexArray;
-        GLuint PositionBuffer;
-        GLuint ColorBuffer;
-    } triangle;
-
-    GLfloat positions[] = {
-        -1.0f, -1.0f, 0.0f,
-        1.0f, -1.0f, 0.0f,
-        0.0f, 1.0f, 0.0f
+    Mesh *triangle = new Mesh;
+    triangle->Positions = {
+        vec3(-1.0f, -1.0f, 0.0f),
+        vec3(1.0f, -1.0f, 0.0f),
+        vec3(0.0f, 1.0f, 0.0f)
     };
-
-    GLfloat colors[] = {
-        1.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 1.0f
+    triangle->Colors = {
+        vec3(1.0f, 0.0f, 0.0f),
+        vec3(0.0f, 1.0f, 0.0f),
+        vec3(0.0f, 0.0f, 1.0f)
     };
-
-    glCreateVertexArrays(1, &triangle.VertexArray);
-    glCreateBuffers(1, &triangle.PositionBuffer);
-    glCreateBuffers(1, &triangle.ColorBuffer);
-    glVertexArrayAttribFormat(triangle.VertexArray, 0, 3, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribFormat(triangle.VertexArray, 1, 3, GL_FLOAT, GL_FALSE, 0);
-    glVertexArrayAttribBinding(triangle.VertexArray, 0, 0);
-    glVertexArrayAttribBinding(triangle.VertexArray, 1, 1);
-    glEnableVertexArrayAttrib(triangle.VertexArray, 0);
-    glEnableVertexArrayAttrib(triangle.VertexArray, 1);
-    glVertexArrayVertexBuffer(triangle.VertexArray, 0, triangle.PositionBuffer, 0, sizeof(GLfloat) * 3);
-    glVertexArrayVertexBuffer(triangle.VertexArray, 1, triangle.ColorBuffer, 0, sizeof(GLfloat) * 3);
-    glNamedBufferData(triangle.PositionBuffer, 3*3*sizeof(GLfloat), positions, GL_STATIC_DRAW);
-    glNamedBufferData(triangle.ColorBuffer, 3*3*sizeof(GLfloat), colors, GL_STATIC_DRAW);
+    triangle->Elements = {
+        0, 1, 2
+    };
+    triangle->UploadToGPU();
 
     struct {
         GLuint VertexShader;
@@ -273,7 +323,6 @@ int main(int argc, char** argv) {
     camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));
 
     glViewport(0,0,640,480);
-    glBindVertexArray(triangle.VertexArray);
     glUseProgram(shader.Program);
     while (!glfwWindowShouldClose(window)) {
         input.NewFrame();
@@ -304,7 +353,7 @@ int main(int argc, char** argv) {
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        triangle->Draw();
         glfwSwapBuffers(window);
     }
     
