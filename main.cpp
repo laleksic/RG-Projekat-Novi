@@ -5,7 +5,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glfw/glfw3.h>
+#include <array>
 using namespace glm;
+using namespace std;
 
 class Camera {
     // Pitch/Yaw are in degrees
@@ -55,6 +57,58 @@ public:
     }
 };
 
+class Input {
+    struct {
+        array<bool, GLFW_KEY_LAST+1> KeyDown;
+        array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown;  
+        vec2 MousePosition;    
+    } ThisFrame, LastFrame;
+
+public:
+    void OnKey(int key, int scancode, int action, int mods) {
+        switch (action) {
+            case GLFW_PRESS: ThisFrame.KeyDown.at(key) = true; break;
+            case GLFW_RELEASE: ThisFrame.KeyDown.at(key) = false; break;
+        }
+    }
+    void OnMouseButton(int button, int action, int mods) {
+        switch (action) {
+            case GLFW_PRESS: ThisFrame.ButtonDown.at(button) = true; break;
+            case GLFW_RELEASE: ThisFrame.ButtonDown.at(button) = false; break;            
+        }
+    }
+    void OnCursorPos(double xpos, double ypos) {
+        ThisFrame.MousePosition = vec2(xpos, ypos);
+    }
+    void NewFrame() {
+        LastFrame = ThisFrame;
+    }
+    vec2 GetMousePosition() const {
+        return ThisFrame.MousePosition;
+    }
+    vec2 GetMouseDelta() const {
+        return ThisFrame.MousePosition - LastFrame.MousePosition;
+    }
+    bool IsKeyDown(int key) const {
+        return ThisFrame.KeyDown.at(key);
+    }
+    bool IsButtonDown(int button) const {
+        return ThisFrame.ButtonDown.at(button);
+    }
+    bool WasKeyPressed(int key) const {
+        return ThisFrame.KeyDown.at(key) && !LastFrame.KeyDown.at(key);
+    }
+    bool WasKeyReleased(int key) const {
+        return !ThisFrame.KeyDown.at(key) && LastFrame.KeyDown.at(key);
+    }
+    bool WasButtonPressed(int button) const {
+        return ThisFrame.ButtonDown.at(button) && !LastFrame.ButtonDown.at(button);
+    }
+    bool WasButtonReleased(int button) const {
+        return !ThisFrame.ButtonDown.at(button) && LastFrame.ButtonDown.at(button);
+    }
+};
+
 int main(int argc, char** argv) {
     glfwSetErrorCallback([](int code, const char *msg){
         fprintf(stdout, "GLFW error (%d): %s\n", code, msg);
@@ -68,6 +122,20 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     GLFWwindow *window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
+    Input input;
+    glfwSetWindowUserPointer(window, &input);
+    glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
+        Input *input = static_cast<Input*>(glfwGetWindowUserPointer(window));
+        input->OnKey(key, scancode, action, mods);
+    });
+    glfwSetMouseButtonCallback(window, [](GLFWwindow *window, int button, int action, int mods){
+        Input *input = static_cast<Input*>(glfwGetWindowUserPointer(window));
+        input->OnMouseButton(button, action, mods);
+    });
+    glfwSetCursorPosCallback(window, [](GLFWwindow *window, double xpos, double ypos){
+        Input *input = static_cast<Input*>(glfwGetWindowUserPointer(window));
+        input->OnCursorPos(xpos, ypos);
+    });
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glEnable(GL_DEBUG_OUTPUT);
@@ -202,16 +270,17 @@ int main(int argc, char** argv) {
     } matrices;
 
     camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));
-    matrices.Model = mat4(1.0f);
-    matrices.View = camera.GetViewMatrix();
-    matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
-    matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
-    glProgramUniformMatrix4fv(shader.Program, shader.ModelViewProjection, 1, GL_FALSE, value_ptr(matrices.ModelViewProjection));
 
     glViewport(0,0,640,480);
     glBindVertexArray(triangle.VertexArray);
     glUseProgram(shader.Program);
     while (!glfwWindowShouldClose(window)) {
+        matrices.Model = mat4(1.0f);
+        matrices.View = camera.GetViewMatrix();
+        matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
+        matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
+        glProgramUniformMatrix4fv(shader.Program, shader.ModelViewProjection, 1, GL_FALSE, value_ptr(matrices.ModelViewProjection));
+
         glfwPollEvents();
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
