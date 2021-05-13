@@ -5,6 +5,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glfw/glfw3.h>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <array>
@@ -237,7 +240,7 @@ public:
         glCreateTextures(GL_TEXTURE_2D, 1, &TextureID);
         int w, h;
         string pathString = path.string();
-        // printf("Loading texture from %s\n", pathString.c_str());
+        printf("Loading texture from %s\n", pathString.c_str());
         int channels;
         GLubyte *pixels = stbi_load(pathString.c_str(), &w, &h, &channels, 4);
         if (!pixels) {
@@ -406,6 +409,19 @@ public:
 
 class IOUtils {
     fs::path ExecutablePath;
+
+    bool TryFindDataFile(fs::path searchRoot, string fileName, fs::path& outPath) const {
+        for (auto& entry: fs::directory_iterator(searchRoot)) {
+            if (entry.is_regular_file() && entry.path().filename() == fileName) {
+                outPath = entry.path();
+                return true;
+            }
+            if (entry.is_directory() && TryFindDataFile(entry.path(), fileName, outPath)) {
+                return true;
+            }
+        }
+        return false;
+    }    
 public:
     IOUtils(fs::path executablePath): ExecutablePath(executablePath) {}
     fs::path GetExecutablePath() const {
@@ -415,23 +431,69 @@ public:
         return GetExecutablePath()/"Data";
     }
     fs::path FindDataFile(string fileName) const {
-        for (auto& entry: fs::directory_iterator(GetDataPath())) {
-            if (entry.is_regular_file() && entry.path().filename() == fileName) {
-                return entry.path();
-            }
+        fs::path outPath;
+        if (!TryFindDataFile(GetDataPath(), fileName, outPath)) {
+            printf("Can't open data file %s\n", fileName);
+            abort();
         }
-        printf("Can't open data file %s\n", fileName);
-        abort();
-    }
+        return outPath;
+    }    
 };
 
 typedef shared_ptr<IOUtils> IOUtilsPtr;
 typedef shared_ptr<Mesh> MeshPtr;
 typedef shared_ptr<Shader> ShaderPtr;
 
+class Model {
+public:
+    vector<MeshPtr> Meshes;
+    vector<TexturePtr> DiffuseTextures;
+
+    Model(fs::path path, IOUtilsPtr IO) {
+        Assimp::Importer importer;
+        string pathString = path.string();
+        unsigned flags = 0;
+        flags |= aiProcess_Triangulate;
+        flags |= aiProcess_PreTransformVertices;
+        flags |= aiProcess_FlipUVs;
+        const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
+        if (!scene) {
+            printf("Couldn't load %s!\n", path);
+            abort();
+        }
+        for (int i=0; i<scene->mNumMeshes; ++i) {
+            aiMesh *mesh = scene->mMeshes[i];
+            MeshPtr meshp = make_shared<Mesh>();
+            meshp->Positions.resize(mesh->mNumVertices);
+            meshp->Colors.resize(mesh->mNumVertices);
+            meshp->TexCoords.resize(mesh->mNumVertices);
+            meshp->Elements.reserve(mesh->mNumFaces * 3);
+            for (int j=0; j<mesh->mNumVertices; ++j) {
+                meshp->Positions[j] = vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
+                meshp->Colors[j] = vec3(1,1,1);
+                meshp->TexCoords[j] = vec2(mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y);
+            }
+            for (int j=0; j<mesh->mNumFaces; ++j) {
+                meshp->Elements.push_back(mesh->mFaces[j].mIndices[0]);
+                meshp->Elements.push_back(mesh->mFaces[j].mIndices[1]);
+                meshp->Elements.push_back(mesh->mFaces[j].mIndices[2]);
+            }
+            meshp->UploadToGPU();
+            Meshes.push_back(meshp);
+
+            aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
+            aiString diffuseMapPath;
+            material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
+            TexturePtr diffuseMap = make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str()));
+            DiffuseTextures.push_back(diffuseMap);
+        }        
+    }
+};
+
+typedef shared_ptr<Model> ModelPtr;
+
 class Main: public Engine {
-    Mesh Triangle, Ground;
-    TexturePtr Brick, Grass;
+    ModelPtr Sponza;
     ShaderPtr BasicShader;
     FPSCamera Camera;
     mat4 ProjectionMatrix;
@@ -442,7 +504,7 @@ class Main: public Engine {
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
-        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 10.0f);  
+        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 50.0f);  
         glViewport(0,0, windowSize.x, windowSize.y);
     }
     fs::path GetExecutablePath() const {
@@ -453,52 +515,7 @@ class Main: public Engine {
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         IO = make_shared<IOUtils>(GetExecutablePath());
-
-        Triangle.Positions = {
-            vec3(-1.0f, -1.0f, 0.0f),
-            vec3(1.0f, -1.0f, 0.0f),
-            vec3(0.0f, 1.0f, 0.0f)
-        };
-        Triangle.Colors = {
-            vec3(1.0f, 0.0f, 0.0f),
-            vec3(0.0f, 1.0f, 0.0f),
-            vec3(0.0f, 0.0f, 1.0f)
-        };
-        Triangle.Elements = {
-            0, 1, 2
-        };
-        Triangle.TexCoords = {
-            vec2(0,0),
-            vec2(1,0),
-            vec2(0.5,1)
-        };
-        Triangle.UploadToGPU();
-
-        Ground.Positions = {
-            vec3(-5,-1,-5),
-            vec3(5,-1,-5),
-            vec3(5,-1,5),
-            vec3(-5,-1,5)
-        };
-        Ground.Colors = {
-            vec3(1,1,1),
-            vec3(1,1,1),
-            vec3(1,1,1),
-            vec3(1,1,1)
-        };
-        Ground.Elements = {0,1,2,  2,3,0};
-        Ground.TexCoords = {
-            vec2(0,0),
-            vec2(1,0),
-            vec2(1,1),
-            vec2(0,1)
-        };
-        Ground.UploadToGPU();
-
-        
-        Brick = make_shared<Texture>(IO->FindDataFile("brick.jpg"));
-        Grass = make_shared<Texture>(IO->FindDataFile("grass.jpg"));
-        
+        Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
         const char *shaderSource = R"glsl(
             uniform mat4 ModelViewProjection;
             uniform sampler2D DiffuseTexture;
@@ -553,13 +570,12 @@ public:
         glEnable(GL_DEPTH_TEST);
 
         BasicShader->Use();
-        BasicShader->SetUniform("DiffuseTexture", 0);
-        Brick->Bind(0);
-        Triangle.Bind();
-        Triangle.Draw();
-        Grass->Bind(0);
-        Ground.Bind();
-        Ground.Draw();        
+        BasicShader->SetUniform("DiffuseTexture", 0);  
+        for (int i=0; i<Sponza->Meshes.size(); ++i) {
+            Sponza->DiffuseTextures[i]->Bind(0);
+            Sponza->Meshes[i]->Bind();
+            Sponza->Meshes[i]->Draw();
+        }     
     }
 };
 
