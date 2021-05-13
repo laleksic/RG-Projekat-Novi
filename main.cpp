@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <memory>
 using namespace glm;
 using namespace std;
 
@@ -67,7 +68,6 @@ class InputMaster {
         vec2 MousePosition = vec2(0.0f);  
         ivec2 WindowSize = ivec2(0,0);
     } ThisFrame, LastFrame;
-    GLFWwindow *Window;
 
     void OnKey(int key, int scancode, int action, int mods) {
         switch (action) {
@@ -88,7 +88,7 @@ class InputMaster {
         ThisFrame.WindowSize = ivec2(width, height);
     }    
 public:
-    InputMaster(GLFWwindow *window): Window(window) {
+    InputMaster(GLFWwindow *window) {
         glfwSetWindowUserPointer(window, this);
         glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
             InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
@@ -108,7 +108,7 @@ public:
         });   
 
         int w, h;
-        glfwGetWindowSize(Window, &w, &h);
+        glfwGetWindowSize(window, &w, &h);
         OnWindowSize(w, h);     
     }
     void NewFrame() {
@@ -147,15 +147,17 @@ public:
     }
 };
 
+typedef shared_ptr<InputMaster> InputMasterPtr;
+
 class FPSCamera: public Camera {
-    InputMaster& Input;
+    InputMasterPtr Input;
 
 public:
-    FPSCamera(InputMaster& input): Input(input) {}
+    FPSCamera(InputMasterPtr input): Input(input) {}
     void Update() {
         // Mouselook
-        if (Input.IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-            vec2 mouseDelta = Input.GetMouseDelta();
+        if (Input->IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+            vec2 mouseDelta = Input->GetMouseDelta();
             const float MOUSE_SENSITIVITY = 0.1f;
             SetYaw(GetYaw() - mouseDelta.x * MOUSE_SENSITIVITY);
             SetPitch(GetPitch() - mouseDelta.y * MOUSE_SENSITIVITY);
@@ -166,12 +168,61 @@ public:
         vec3 forward = GetDirection();
         vec3 right = rotateY(vec3(forward.x, 0.0f, forward.z), radians(-90.0f));
         vec3 wishDirection(0.0f, 0.0f, 0.0f);
-        wishDirection += (Input.IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
-        wishDirection += (Input.IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
-        wishDirection += (Input.IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
-        wishDirection += (Input.IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
+        wishDirection += (Input->IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
+        wishDirection += (Input->IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
+        wishDirection += (Input->IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
+        wishDirection += (Input->IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
         SetPosition(GetPosition() + wishDirection * MOVEMENT_SPEED);
     }
+};
+
+class Engine {
+    GLFWwindow *Window;
+
+public:
+    InputMasterPtr Input;
+    Engine() {
+        glfwSetErrorCallback([](int code, const char *msg){
+            fprintf(stdout, "GLFW error (%d): %s\n", code, msg);
+            abort();
+        });
+        glfwInit();
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+        Window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
+        Input = make_shared<InputMaster>(Window);
+
+        glfwMakeContextCurrent(Window);
+        gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
+            GLenum severity, GLsizei length, const GLchar *message,
+            const void *userParam) {
+                fprintf(stdout, "GL debug message: %s\n", message);
+                if (type == GL_DEBUG_TYPE_ERROR) {
+                    abort();
+                }
+        }, 0);
+    }
+    ~Engine() {
+        glfwDestroyWindow(Window);
+        glfwTerminate();
+    }
+    void Run() {
+        while (!glfwWindowShouldClose(Window)) {
+            Input->NewFrame();       
+            OnFrame(); 
+            glfwSwapBuffers(Window);
+        }
+    }
+    void Quit() {
+        glfwSetWindowShouldClose(Window, GLFW_TRUE);
+    }
+    virtual void OnFrame() = 0;
 };
 
 class Mesh {
@@ -238,7 +289,7 @@ public:
 };
 
 class Shader {
-    GLuint Program;
+    GLuint Program = 0;
 
 public:
     Shader(const char *source) {
@@ -265,7 +316,7 @@ public:
             GLchar buf[bufSize];
             glGetShaderInfoLog(vertexShader, bufSize, 0, &buf[0]);
             printf("Vertex shader error: %s\n", buf);
-            exit(1);
+            abort();
         }
         glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &ok);
         if (ok == GL_FALSE) {
@@ -274,7 +325,7 @@ public:
             GLchar buf[bufSize];
             glGetShaderInfoLog(fragmentShader, bufSize, 0, &buf[0]);
             printf("Fragment shader error: %s\n", buf);
-            exit(1);
+            abort();
         }
         glGetProgramiv(Program, GL_LINK_STATUS, &ok);
         if (ok == GL_FALSE) {
@@ -283,14 +334,15 @@ public:
             GLchar buf[bufSize];
             glGetProgramInfoLog(Program, bufSize, 0, &buf[0]);
             printf("Shader linking error: %s\n", buf);
-            exit(1);
+            abort();
         }
 
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
     }
     ~Shader() {
-        glDeleteProgram(Program);
+        if (Program)
+            glDeleteProgram(Program);
     }
     void SetUniform(const char *name, const mat4& value) {
         glProgramUniformMatrix4fv(Program, 
@@ -303,133 +355,108 @@ public:
     }
 };
 
-int main(int argc, char** argv) {
-    glfwSetErrorCallback([](int code, const char *msg){
-        fprintf(stdout, "GLFW error (%d): %s\n", code, msg);
-        exit(1);
-    });
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-    // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow *window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
-    InputMaster input(window);
+typedef shared_ptr<Mesh> MeshPtr;
+typedef shared_ptr<Shader> ShaderPtr;
 
-    glfwMakeContextCurrent(window);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
-        GLenum severity, GLsizei length, const GLchar *message,
-        const void *userParam) {
-            fprintf(stdout, "GL debug message: %s\n", message);
-            if (type == GL_DEBUG_TYPE_ERROR) {
-                exit(1);
-            }
-    }, 0);
+class Main: public Engine {
+    Mesh Triangle, Ground;
+    ShaderPtr BasicShader;
+    FPSCamera Camera;
+    mat4 ProjectionMatrix;
 
-    Mesh *triangle = new Mesh;
-    triangle->Positions = {
-        vec3(-1.0f, -1.0f, 0.0f),
-        vec3(1.0f, -1.0f, 0.0f),
-        vec3(0.0f, 1.0f, 0.0f)
-    };
-    triangle->Colors = {
-        vec3(1.0f, 0.0f, 0.0f),
-        vec3(0.0f, 1.0f, 0.0f),
-        vec3(0.0f, 0.0f, 1.0f)
-    };
-    triangle->Elements = {
-        0, 1, 2
-    };
-    triangle->UploadToGPU();
+    void CalculateViewport() {
+        ivec2 windowSize = Input->GetWindowSize();
+        float aspectRatio = (float)windowSize.x / windowSize.y;
+        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 10.0f);  
+        glViewport(0,0, windowSize.x, windowSize.y);
+    }
+public:
+    Main(): Camera(Input) {
+        Triangle.Positions = {
+            vec3(-1.0f, -1.0f, 0.0f),
+            vec3(1.0f, -1.0f, 0.0f),
+            vec3(0.0f, 1.0f, 0.0f)
+        };
+        Triangle.Colors = {
+            vec3(1.0f, 0.0f, 0.0f),
+            vec3(0.0f, 1.0f, 0.0f),
+            vec3(0.0f, 0.0f, 1.0f)
+        };
+        Triangle.Elements = {
+            0, 1, 2
+        };
+        Triangle.UploadToGPU();
 
-    Mesh *ground = new Mesh;
-    ground->Positions = {
-        vec3(-5,-1,-5),
-        vec3(5,-1,-5),
-        vec3(5,-1,5),
-        vec3(-5,-1,5)
-    };
-    ground->Colors = {
-        vec3(1,1,1),
-        vec3(1,1,1),
-        vec3(1,1,1),
-        vec3(1,1,1)
-    };
-    ground->Elements = {0,1,2,  2,3,0};
-    ground->UploadToGPU();
+        Ground.Positions = {
+            vec3(-5,-1,-5),
+            vec3(5,-1,-5),
+            vec3(5,-1,5),
+            vec3(-5,-1,5)
+        };
+        Ground.Colors = {
+            vec3(1,1,1),
+            vec3(1,1,1),
+            vec3(1,1,1),
+            vec3(1,1,1)
+        };
+        Ground.Elements = {0,1,2,  2,3,0};
+        Ground.UploadToGPU();
 
-    const char *shaderSource = R"glsl(
-        uniform mat4 ModelViewProjection;
+        const char *shaderSource = R"glsl(
+            uniform mat4 ModelViewProjection;
 
-        #if defined(VERTEX_SHADER)
-            layout (location=0) in vec3 Position;
-            layout (location=1) in vec3 Color;
-            out VertexData {
-                vec3 Color;
-            } vertexData;
+            #if defined(VERTEX_SHADER)
+                layout (location=0) in vec3 Position;
+                layout (location=1) in vec3 Color;
+                out VertexData {
+                    vec3 Color;
+                } vertexData;
 
-            void main() {
-                gl_Position.xyz = Position;
-                gl_Position.w = 1.0f;
-                gl_Position = ModelViewProjection * gl_Position;
-                vertexData.Color = Color;
-            }
-        #elif defined(FRAGMENT_SHADER)
-            in VertexData {
-                vec3 Color;
-            } vertexData;
+                void main() {
+                    gl_Position.xyz = Position;
+                    gl_Position.w = 1.0f;
+                    gl_Position = ModelViewProjection * gl_Position;
+                    vertexData.Color = Color;
+                }
+            #elif defined(FRAGMENT_SHADER)
+                in VertexData {
+                    vec3 Color;
+                } vertexData;
 
-            out vec4 color;
+                out vec4 color;
 
-            void main() {
-                color = vec4(vertexData.Color, 1.0f);    
-            }
-        #endif
-    )glsl";
+                void main() {
+                    color = vec4(vertexData.Color, 1.0f);    
+                }
+            #endif
+        )glsl";
+        BasicShader = make_shared<Shader>(shaderSource);
 
-    Shader shader(shaderSource);
-
-    FPSCamera camera(input);
-
-    struct {
-        mat4 Model, View, Projection;
-        mat4 ModelViewProjection;
-    } matrices;
-    matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
-
-    camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));
-
-    glViewport(0,0,640,480);
-    shader.Use();
-    while (!glfwWindowShouldClose(window)) {
-        input.NewFrame();
-        if (input.WasWindowResized()) {
-            printf("Boom\n");
-            ivec2 dims = input.GetWindowSize();
-            glViewport(0,0,dims.x,dims.y);
-            matrices.Projection = perspective(radians(60.0f), (float)dims.x/dims.y, 0.1f, 10.0f);
+        Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
+        CalculateViewport();
+    }
+    virtual void OnFrame() override final {
+        if (Input->WasWindowResized()) {
+            CalculateViewport();
         }
 
-        camera.Update();
+        Camera.Update();
 
-        matrices.Model = mat4(1.0f);
-        matrices.View = camera.GetViewMatrix();
-        matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
-        shader.SetUniform("ModelViewProjection", matrices.ModelViewProjection);
+        mat4 modelViewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
+        BasicShader->SetUniform("ModelViewProjection", modelViewProjectionMatrix);
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
-        triangle->Draw();
-        ground->Draw();
-        glfwSwapBuffers(window);
+
+        BasicShader->Use();
+        Triangle.Draw();
+        Ground.Draw();        
     }
-    
-    glfwDestroyWindow(window);
-    glfwTerminate();
+};
+
+int main(int argc, char** argv) {
+    Main app;
+    app.Run();
+    return 0;
 }
