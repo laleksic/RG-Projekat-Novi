@@ -415,21 +415,27 @@ class Main: public Engine {
     mat4 ProjectionMatrix;
     int Argc;
     char **Argv;
-
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
         ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 10.0f);  
         glViewport(0,0, windowSize.x, windowSize.y);
     }
-
-    fs::path GetExecutablePath() {
+    fs::path GetExecutablePath() const {
         // https://stackoverflow.com/a/55579815
         return fs::weakly_canonical(fs::path(Argv[0])).parent_path();
     }
-
-    fs::path GetDataPath() {
+    fs::path GetDataPath() const {
         return GetExecutablePath()/"Data";
+    }
+    fs::path FindDataFile(string fileName) const {
+        for (auto& entry: fs::directory_iterator(GetDataPath())) {
+            if (entry.is_regular_file() && entry.path().filename() == fileName) {
+                return entry.path();
+            }
+        }
+        printf("Can't open data file %s\n", fileName);
+        abort();
     }
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
@@ -475,8 +481,8 @@ public:
         Ground.UploadToGPU();
 
         
-        Brick = make_shared<Texture>(GetDataPath()/"brick.jpg");
-        Grass = make_shared<Texture>(GetDataPath()/"grass.jpg");
+        Brick = make_shared<Texture>(FindDataFile("brick.jpg"));
+        Grass = make_shared<Texture>(FindDataFile("grass.jpg"));
         
         const char *shaderSource = R"glsl(
             uniform mat4 ModelViewProjection;
