@@ -7,6 +7,54 @@
 #include <glfw/glfw3.h>
 using namespace glm;
 
+class Camera {
+    // Pitch/Yaw are in degrees
+    float Pitch = 0.0f;
+    float Yaw = 0.0f;
+    vec3 Position = vec3(0.0f, 0.0f, 0.0f);
+
+public:
+    void SetPitch(float pitch) {
+        Pitch = pitch;
+        const float EPSILON = 0.01f;
+        if (Pitch > (90 - EPSILON))
+            Pitch = 90 - EPSILON;
+        if (Pitch < -(90 - EPSILON))
+            Pitch = -(90 - EPSILON);
+    };
+    void SetYaw(float yaw) {
+        Yaw = yaw;
+        while (Yaw > 360) {
+            Yaw -= 360;
+        }
+        while (Yaw < 0) {
+            Yaw += 360;
+        }
+    }
+    void SetPosition(vec3 position) {
+        Position = position;
+    }
+    float GetPitch() const {
+        return Pitch;
+    };
+    float GetYaw() const {
+        return Yaw;
+    };
+    vec3 GetPosition() const {
+        return Position;
+    }
+    vec3 GetDirection() const {
+        vec3 direction(0.0f, 0.0f, -1.0f);
+        direction = rotateY(direction, Yaw);
+        direction = rotateX(direction, Pitch);
+        return direction;
+    }
+    mat4 GetViewMatrix() const {
+        const vec3 WORLD_UP(0.0f, 1.0f, 0.0f);
+        return lookAt(Position, Position + GetDirection(), WORLD_UP);
+    }
+};
+
 int main(int argc, char** argv) {
     glfwSetErrorCallback([](int code, const char *msg){
         fprintf(stdout, "GLFW error (%d): %s\n", code, msg);
@@ -146,30 +194,16 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    struct {
-        vec3 Position;
-        vec3 Direction; // Calculated from Pitch/Yaw
-        float Pitch, Yaw;
-    } camera;
+    Camera camera;
 
     struct {
         mat4 Model, View, Projection;
         mat4 ModelViewProjection;
     } matrices;
 
-    struct {
-        vec3 Up;
-    } world;
-
-    camera.Position = vec3(0.0f, 0.0f, 2.0f);
-    camera.Pitch = 0.0f;
-    camera.Yaw = 0.0f;
-    camera.Direction = vec3(0.0f, 0.0f, -1.0f);
-    camera.Direction = rotateY(camera.Direction, camera.Yaw);
-    camera.Direction = rotateX(camera.Direction, camera.Pitch);
-    world.Up = vec3(0.0f, 1.0f, 0.0f);
+    camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));
     matrices.Model = mat4(1.0f);
-    matrices.View = lookAt(camera.Position, camera.Position + camera.Direction, world.Up);
+    matrices.View = camera.GetViewMatrix();
     matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
     matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
     glProgramUniformMatrix4fv(shader.Program, shader.ModelViewProjection, 1, GL_FALSE, value_ptr(matrices.ModelViewProjection));
