@@ -8,6 +8,7 @@
 #include <array>
 #include <algorithm>
 #include <vector>
+#include <string>
 using namespace glm;
 using namespace std;
 
@@ -149,7 +150,6 @@ public:
         glDeleteBuffers(1, &PositionBuffer);
         glDeleteBuffers(1, &ColorBuffer);
     } 
-
     void UploadToGPU() {
         ElementCount = Elements.size();
         const size_t VERTEX_COUNT = Positions.size();
@@ -169,11 +169,76 @@ public:
         
         glNamedBufferData(ElementBuffer, ElementCount * sizeof(GLuint), Elements.data(), GL_STATIC_DRAW);
     }
-
     void Draw() {
         glBindVertexArray(VertexArray);
         glDrawElements(GL_TRIANGLES, ElementCount, GL_UNSIGNED_INT, 0);
     }    
+};
+
+class Shader {
+    GLuint Program;
+
+public:
+    Shader(const char *source) {
+        GLuint vertexShader;
+        GLuint fragmentShader;
+        const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", source};
+        const char *fragmentSources[] = {"#version 450 core\n", "#define FRAGMENT_SHADER\n", source};
+        vertexShader = glCreateShader(GL_VERTEX_SHADER);
+        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        Program = glCreateProgram();
+        glShaderSource(vertexShader, 3, vertexSources, 0);
+        glShaderSource(fragmentShader, 3, fragmentSources, 0);
+        glCompileShader(vertexShader);
+        glCompileShader(fragmentShader);
+        glAttachShader(Program, vertexShader);
+        glAttachShader(Program, fragmentShader);
+        glLinkProgram(Program);
+
+        GLint ok;
+        glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &ok);
+        if (ok == GL_FALSE) {
+            GLsizei bufSize;
+            glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &bufSize);
+            GLchar buf[bufSize];
+            glGetShaderInfoLog(vertexShader, bufSize, 0, &buf[0]);
+            printf("Vertex shader error: %s\n", buf);
+            exit(1);
+        }
+        glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &ok);
+        if (ok == GL_FALSE) {
+            GLsizei bufSize;
+            glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &bufSize);
+            GLchar buf[bufSize];
+            glGetShaderInfoLog(fragmentShader, bufSize, 0, &buf[0]);
+            printf("Fragment shader error: %s\n", buf);
+            exit(1);
+        }
+        glGetProgramiv(Program, GL_LINK_STATUS, &ok);
+        if (ok == GL_FALSE) {
+            GLsizei bufSize;
+            glGetProgramiv(Program, GL_INFO_LOG_LENGTH, &bufSize);
+            GLchar buf[bufSize];
+            glGetProgramInfoLog(Program, bufSize, 0, &buf[0]);
+            printf("Shader linking error: %s\n", buf);
+            exit(1);
+        }
+
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+    }
+    ~Shader() {
+        glDeleteProgram(Program);
+    }
+    void SetUniform(const char *name, const mat4& value) {
+        glProgramUniformMatrix4fv(Program, 
+            glGetUniformLocation(Program, name),
+            1, GL_FALSE, value_ptr(value)
+        );
+    }
+    void Use() {
+        glUseProgram(Program);
+    }
 };
 
 int main(int argc, char** argv) {
@@ -232,15 +297,6 @@ int main(int argc, char** argv) {
     };
     triangle->UploadToGPU();
 
-    struct {
-        GLuint VertexShader;
-        GLuint FragmentShader;
-        GLuint Program;
-
-        // Uniforms
-        GLuint ModelViewProjection;
-    } shader;
-
     const char *shaderSource = R"glsl(
         uniform mat4 ModelViewProjection;
 
@@ -269,49 +325,8 @@ int main(int argc, char** argv) {
             }
         #endif
     )glsl";
-    const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", shaderSource};
-    const char *fragmentSources[] = {"#version 450 core\n", "#define FRAGMENT_SHADER\n", shaderSource};
-    
-    shader.VertexShader = glCreateShader(GL_VERTEX_SHADER);
-    shader.FragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    shader.Program = glCreateProgram();
-    glShaderSource(shader.VertexShader, 3, vertexSources, 0);
-    glShaderSource(shader.FragmentShader, 3, fragmentSources, 0);
-    glCompileShader(shader.VertexShader);
-    glCompileShader(shader.FragmentShader);
-    glAttachShader(shader.Program, shader.VertexShader);
-    glAttachShader(shader.Program, shader.FragmentShader);
-    glLinkProgram(shader.Program);
-    shader.ModelViewProjection = glGetUniformLocation(shader.Program, "ModelViewProjection");
 
-    GLint ok;
-    glGetShaderiv(shader.VertexShader, GL_COMPILE_STATUS, &ok);
-    if (ok == GL_FALSE) {
-        GLsizei bufSize;
-        glGetShaderiv(shader.VertexShader, GL_INFO_LOG_LENGTH, &bufSize);
-        GLchar buf[bufSize];
-        glGetShaderInfoLog(shader.VertexShader, bufSize, 0, &buf[0]);
-        printf("Vertex shader error: %s\n", buf);
-        exit(1);
-    }
-    glGetShaderiv(shader.FragmentShader, GL_COMPILE_STATUS, &ok);
-    if (ok == GL_FALSE) {
-        GLsizei bufSize;
-        glGetShaderiv(shader.FragmentShader, GL_INFO_LOG_LENGTH, &bufSize);
-        GLchar buf[bufSize];
-        glGetShaderInfoLog(shader.FragmentShader, bufSize, 0, &buf[0]);
-        printf("Fragment shader error: %s\n", buf);
-        exit(1);
-    }
-    glGetProgramiv(shader.Program, GL_LINK_STATUS, &ok);
-    if (ok == GL_FALSE) {
-        GLsizei bufSize;
-        glGetProgramiv(shader.Program, GL_INFO_LOG_LENGTH, &bufSize);
-        GLchar buf[bufSize];
-        glGetProgramInfoLog(shader.Program, bufSize, 0, &buf[0]);
-        printf("Shader linking error: %s\n", buf);
-        exit(1);
-    }
+    Shader shader(shaderSource);
 
     Camera camera;
 
@@ -323,7 +338,7 @@ int main(int argc, char** argv) {
     camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));
 
     glViewport(0,0,640,480);
-    glUseProgram(shader.Program);
+    shader.Use();
     while (!glfwWindowShouldClose(window)) {
         input.NewFrame();
         glfwPollEvents();
@@ -349,7 +364,7 @@ int main(int argc, char** argv) {
         matrices.View = camera.GetViewMatrix();
         matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
         matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
-        glProgramUniformMatrix4fv(shader.Program, shader.ModelViewProjection, 1, GL_FALSE, value_ptr(matrices.ModelViewProjection));
+        shader.SetUniform("ModelViewProjection", matrices.ModelViewProjection);
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
