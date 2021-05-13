@@ -60,7 +60,7 @@ public:
     }
 };
 
-class Input {
+class InputMaster {
     struct {
         array<bool, GLFW_KEY_LAST+1> KeyDown = {false};
         array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown = {false};  
@@ -254,18 +254,18 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     GLFWwindow *window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
-    Input input;
+    InputMaster input;
     glfwSetWindowUserPointer(window, &input);
     glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
-        Input *input = static_cast<Input*>(glfwGetWindowUserPointer(window));
+        InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
         input->OnKey(key, scancode, action, mods);
     });
     glfwSetMouseButtonCallback(window, [](GLFWwindow *window, int button, int action, int mods){
-        Input *input = static_cast<Input*>(glfwGetWindowUserPointer(window));
+        InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
         input->OnMouseButton(button, action, mods);
     });
     glfwSetCursorPosCallback(window, [](GLFWwindow *window, double xpos, double ypos){
-        Input *input = static_cast<Input*>(glfwGetWindowUserPointer(window));
+        InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
         input->OnCursorPos(xpos, ypos);
     });
     glfwMakeContextCurrent(window);
