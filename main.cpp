@@ -343,11 +343,11 @@ class Shader {
     GLuint Program = 0;
 
 public:
-    Shader(const char *source) {
+    Shader(string source) {
         GLuint vertexShader;
         GLuint fragmentShader;
-        const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", source};
-        const char *fragmentSources[] = {"#version 450 core\n", "#define FRAGMENT_SHADER\n", source};
+        const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", source.c_str()};
+        const char *fragmentSources[] = {"#version 450 core\n", "#define FRAGMENT_SHADER\n", source.c_str()};
         vertexShader = glCreateShader(GL_VERTEX_SHADER);
         fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
         Program = glCreateProgram();
@@ -442,6 +442,18 @@ public:
         }
         return outPath;
     }    
+    string LoadDataFileAsString(string fileName) const {
+        fs::path path = FindDataFile(fileName);
+        string pathString = path.string();
+        string contents;
+        FILE *fp = fopen(pathString.c_str(), "r");
+        fseek(fp, 0, SEEK_END);
+        contents.resize(ftell(fp));
+        rewind(fp);
+        fread(&contents[0], 1, contents.size(), fp);
+        fclose(fp);
+        return contents;
+    }
 };
 
 typedef shared_ptr<IOUtils> IOUtilsPtr;
@@ -520,41 +532,7 @@ public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         IO = make_shared<IOUtils>(GetExecutablePath());
         Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
-        const char *shaderSource = R"glsl(
-            uniform mat4 ModelViewProjection;
-            uniform sampler2D DiffuseTexture;
-
-            #if defined(VERTEX_SHADER)
-                layout (location=0) in vec3 Position;
-                layout (location=1) in vec3 Color;
-                layout (location=2) in vec2 TexCoords;
-                out VertexData {
-                    vec3 Color;
-                    vec2 TexCoords;
-                } vertexData;
-
-                void main() {
-                    gl_Position.xyz = Position;
-                    gl_Position.w = 1.0f;
-                    gl_Position = ModelViewProjection * gl_Position;
-                    vertexData.Color = Color;
-                    vertexData.TexCoords = TexCoords;
-                }
-            #elif defined(FRAGMENT_SHADER)
-                in VertexData {
-                    vec3 Color;
-                    vec2 TexCoords;
-                } vertexData;
-
-                out vec4 color;
-
-                void main() {
-                    color = texture(DiffuseTexture, vertexData.TexCoords);
-                    color *= vec4(vertexData.Color, 1);
-                }
-            #endif
-        )glsl";
-        BasicShader = make_shared<Shader>(shaderSource);
+        BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("BasicShader.glsl"));
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
