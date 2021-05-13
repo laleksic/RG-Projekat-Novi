@@ -248,6 +248,8 @@ public:
             abort();
         }
         int levels = std::max(1, (int)log2((double)w));
+        glTextureParameteri(TextureID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(TextureID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTextureStorage2D(TextureID, levels, GL_RGBA8, w, h);
         glTextureSubImage2D(TextureID, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
         glGenerateTextureMipmap(TextureID);
