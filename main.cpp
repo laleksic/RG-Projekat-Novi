@@ -146,6 +146,33 @@ public:
     }
 };
 
+class FPSCamera: public Camera {
+    InputMaster& Input;
+
+public:
+    FPSCamera(InputMaster& input): Input(input) {}
+    void Update() {
+        // Mouselook
+        if (Input.IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+            vec2 mouseDelta = Input.GetMouseDelta();
+            const float MOUSE_SENSITIVITY = 0.1f;
+            SetYaw(GetYaw() - mouseDelta.x * MOUSE_SENSITIVITY);
+            SetPitch(GetPitch() - mouseDelta.y * MOUSE_SENSITIVITY);
+        }
+        
+        // WASD Movement
+        const float MOVEMENT_SPEED = 0.1f;
+        vec3 forward = GetDirection();
+        vec3 right = rotateY(vec3(forward.x, 0.0f, forward.z), radians(-90.0f));
+        vec3 wishDirection(0.0f, 0.0f, 0.0f);
+        wishDirection += (Input.IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
+        wishDirection += (Input.IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
+        wishDirection += (Input.IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
+        wishDirection += (Input.IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
+        SetPosition(GetPosition() + wishDirection * MOVEMENT_SPEED);
+    }
+};
+
 class Mesh {
     GLuint VertexArray;
 
@@ -366,7 +393,7 @@ int main(int argc, char** argv) {
 
     Shader shader(shaderSource);
 
-    Camera camera;
+    FPSCamera camera(input);
 
     struct {
         mat4 Model, View, Projection;
@@ -388,22 +415,7 @@ int main(int argc, char** argv) {
             matrices.Projection = perspective(radians(60.0f), (float)dims.x/dims.y, 0.1f, 10.0f);
         }
 
-        if (input.IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-            vec2 mouseDelta = input.GetMouseDelta();
-            const float MOUSE_SENSITIVITY = 0.1f;
-            camera.SetYaw(camera.GetYaw() - mouseDelta.x * MOUSE_SENSITIVITY);
-            camera.SetPitch(camera.GetPitch() - mouseDelta.y * MOUSE_SENSITIVITY);
-        }
-        
-        const float MOVEMENT_SPEED = 0.1f;
-        vec3 forward = camera.GetDirection();
-        vec3 right = rotateY(vec3(forward.x, 0.0f, forward.z), radians(-90.0f));
-        vec3 wishDirection(0.0f, 0.0f, 0.0f);
-        wishDirection += (input.IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
-        wishDirection += (input.IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
-        wishDirection += (input.IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
-        wishDirection += (input.IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
-        camera.SetPosition(camera.GetPosition() + wishDirection * MOVEMENT_SPEED);
+        camera.Update();
 
         matrices.Model = mat4(1.0f);
         matrices.View = camera.GetViewMatrix();
