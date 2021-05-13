@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 #include <glfw/glfw3.h>
+using namespace glm;
 
 int main(int argc, char** argv) {
     glfwSetErrorCallback([](int code, const char *msg){
@@ -65,9 +69,14 @@ int main(int argc, char** argv) {
         GLuint VertexShader;
         GLuint FragmentShader;
         GLuint Program;
+
+        // Uniforms
+        GLuint ModelViewProjection;
     } shader;
 
     const char *shaderSource = R"glsl(
+        uniform mat4 ModelViewProjection;
+
         #if defined(VERTEX_SHADER)
             layout (location=0) in vec3 Position;
             layout (location=1) in vec3 Color;
@@ -78,6 +87,7 @@ int main(int argc, char** argv) {
             void main() {
                 gl_Position.xyz = Position;
                 gl_Position.w = 1.0f;
+                gl_Position = ModelViewProjection * gl_Position;
                 vertexData.Color = Color;
             }
         #elif defined(FRAGMENT_SHADER)
@@ -105,6 +115,7 @@ int main(int argc, char** argv) {
     glAttachShader(shader.Program, shader.VertexShader);
     glAttachShader(shader.Program, shader.FragmentShader);
     glLinkProgram(shader.Program);
+    shader.ModelViewProjection = glGetUniformLocation(shader.Program, "ModelViewProjection");
 
     GLint ok;
     glGetShaderiv(shader.VertexShader, GL_COMPILE_STATUS, &ok);
@@ -134,6 +145,34 @@ int main(int argc, char** argv) {
         printf("Shader linking error: %s\n", buf);
         exit(1);
     }
+
+    struct {
+        vec3 Position;
+        vec3 Direction; // Calculated from Pitch/Yaw
+        float Pitch, Yaw;
+    } camera;
+
+    struct {
+        mat4 Model, View, Projection;
+        mat4 ModelViewProjection;
+    } matrices;
+
+    struct {
+        vec3 Up;
+    } world;
+
+    camera.Position = vec3(0.0f, 0.0f, 2.0f);
+    camera.Pitch = 0.0f;
+    camera.Yaw = 0.0f;
+    camera.Direction = vec3(0.0f, 0.0f, -1.0f);
+    camera.Direction = rotateY(camera.Direction, camera.Yaw);
+    camera.Direction = rotateX(camera.Direction, camera.Pitch);
+    world.Up = vec3(0.0f, 1.0f, 0.0f);
+    matrices.Model = mat4(1.0f);
+    matrices.View = lookAt(camera.Position, camera.Position + camera.Direction, world.Up);
+    matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
+    matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
+    glProgramUniformMatrix4fv(shader.Program, shader.ModelViewProjection, 1, GL_FALSE, value_ptr(matrices.ModelViewProjection));
 
     glViewport(0,0,640,480);
     glBindVertexArray(triangle.VertexArray);
