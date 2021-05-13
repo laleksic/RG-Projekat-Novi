@@ -247,8 +247,10 @@ public:
             printf("Failed to open texture at %s\n", pathString.c_str());
             abort();
         }
-        glTextureStorage2D(TextureID, 1, GL_RGBA8, w, h);
+        int levels = std::max(1, (int)log2((double)w));
+        glTextureStorage2D(TextureID, levels, GL_RGBA8, w, h);
         glTextureSubImage2D(TextureID, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        glGenerateTextureMipmap(TextureID);
     }
     ~Texture() {
         glDeleteTextures(1, &TextureID);
