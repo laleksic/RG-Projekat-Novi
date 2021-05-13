@@ -64,10 +64,11 @@ class InputMaster {
     struct {
         array<bool, GLFW_KEY_LAST+1> KeyDown = {false};
         array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown = {false};  
-        vec2 MousePosition = vec2(0.0f);    
+        vec2 MousePosition = vec2(0.0f);  
+        ivec2 WindowSize = ivec2(0,0);
     } ThisFrame, LastFrame;
+    GLFWwindow *Window;
 
-public:
     void OnKey(int key, int scancode, int action, int mods) {
         switch (action) {
             case GLFW_PRESS: ThisFrame.KeyDown.at(key) = true; break;
@@ -82,6 +83,33 @@ public:
     }
     void OnCursorPos(double xpos, double ypos) {
         ThisFrame.MousePosition = vec2(xpos, ypos);
+    }
+    void OnWindowSize(int width, int height) {
+        ThisFrame.WindowSize = ivec2(width, height);
+    }    
+public:
+    InputMaster(GLFWwindow *window): Window(window) {
+        glfwSetWindowUserPointer(window, this);
+        glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
+            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
+            input->OnKey(key, scancode, action, mods);
+        });
+        glfwSetMouseButtonCallback(window, [](GLFWwindow *window, int button, int action, int mods){
+            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
+            input->OnMouseButton(button, action, mods);
+        });
+        glfwSetCursorPosCallback(window, [](GLFWwindow *window, double xpos, double ypos){
+            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
+            input->OnCursorPos(xpos, ypos);
+        });
+        glfwSetWindowSizeCallback(window, [](GLFWwindow *window, int width, int height){
+            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
+            input->OnWindowSize(width, height);
+        });   
+
+        int w, h;
+        glfwGetWindowSize(Window, &w, &h);
+        OnWindowSize(w, h);     
     }
     void NewFrame() {
         LastFrame = ThisFrame;
@@ -109,6 +137,12 @@ public:
     }
     bool WasButtonReleased(int button) const {
         return !ThisFrame.ButtonDown.at(button) && LastFrame.ButtonDown.at(button);
+    }
+    bool WasWindowResized() const {
+        return ThisFrame.WindowSize != LastFrame.WindowSize;
+    }
+    ivec2 GetWindowSize() const {
+        return ThisFrame.WindowSize;
     }
 };
 
@@ -252,22 +286,10 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     GLFWwindow *window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
-    InputMaster input;
-    glfwSetWindowUserPointer(window, &input);
-    glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
-        InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-        input->OnKey(key, scancode, action, mods);
-    });
-    glfwSetMouseButtonCallback(window, [](GLFWwindow *window, int button, int action, int mods){
-        InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-        input->OnMouseButton(button, action, mods);
-    });
-    glfwSetCursorPosCallback(window, [](GLFWwindow *window, double xpos, double ypos){
-        InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-        input->OnCursorPos(xpos, ypos);
-    });
+    InputMaster input(window);
+
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glEnable(GL_DEBUG_OUTPUT);
@@ -350,6 +372,7 @@ int main(int argc, char** argv) {
         mat4 Model, View, Projection;
         mat4 ModelViewProjection;
     } matrices;
+    matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
 
     camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));
 
@@ -358,6 +381,12 @@ int main(int argc, char** argv) {
     while (!glfwWindowShouldClose(window)) {
         input.NewFrame();
         glfwPollEvents();
+        if (input.WasWindowResized()) {
+            printf("Boom\n");
+            ivec2 dims = input.GetWindowSize();
+            glViewport(0,0,dims.x,dims.y);
+            matrices.Projection = perspective(radians(60.0f), (float)dims.x/dims.y, 0.1f, 10.0f);
+        }
 
         if (input.IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
             vec2 mouseDelta = input.GetMouseDelta();
@@ -378,7 +407,6 @@ int main(int argc, char** argv) {
 
         matrices.Model = mat4(1.0f);
         matrices.View = camera.GetViewMatrix();
-        matrices.Projection = perspective(radians(60.0f), 640.0f/480.0f, 0.1f, 10.0f);
         matrices.ModelViewProjection = matrices.Projection * matrices.View * matrices.Model;
         shader.SetUniform("ModelViewProjection", matrices.ModelViewProjection);
 
