@@ -297,6 +297,22 @@ int main(int argc, char** argv) {
     };
     triangle->UploadToGPU();
 
+    Mesh *ground = new Mesh;
+    ground->Positions = {
+        vec3(-5,-1,-5),
+        vec3(5,-1,-5),
+        vec3(5,-1,5),
+        vec3(-5,-1,5)
+    };
+    ground->Colors = {
+        vec3(1,1,1),
+        vec3(1,1,1),
+        vec3(1,1,1),
+        vec3(1,1,1)
+    };
+    ground->Elements = {0,1,2,  2,3,0};
+    ground->UploadToGPU();
+
     const char *shaderSource = R"glsl(
         uniform mat4 ModelViewProjection;
 
@@ -367,8 +383,10 @@ int main(int argc, char** argv) {
         shader.SetUniform("ModelViewProjection", matrices.ModelViewProjection);
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
         triangle->Draw();
+        ground->Draw();
         glfwSwapBuffers(window);
     }
     

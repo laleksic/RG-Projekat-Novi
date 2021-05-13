@@ -14,6 +14,14 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(glfw-3.3.4)
 target_link_libraries(RG-Projekat glfw)
 
+# https://stackoverflow.com/questions/54048956/how-to-include-a-library-using-cmake-in-a-cross-platform-way
+# https://github.com/assimp/assimp/blob/master/Build.md
+set(BUILD_SHARED_LIBS  OFF)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
+set(ASSIMP_BUILD_TESTS OFF)
+add_subdirectory(assimp-5.0.1)
+target_link_libraries(RG-Projekat assimp)
+
 add_subdirectory(glm)
 target_link_libraries(RG-Projekat glm)
 
