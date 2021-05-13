@@ -5,13 +5,17 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glfw/glfw3.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #include <array>
 #include <algorithm>
 #include <vector>
 #include <string>
 #include <memory>
+#include <filesystem>
 using namespace glm;
 using namespace std;
+namespace fs = filesystem;
 
 class Camera {
     // Pitch/Yaw are in degrees
@@ -225,12 +229,41 @@ public:
     virtual void OnFrame() = 0;
 };
 
+class Texture {
+    GLuint TextureID;
+
+public:
+    Texture(fs::path path) {
+        glCreateTextures(GL_TEXTURE_2D, 1, &TextureID);
+        int w, h;
+        string pathString = path.string();
+        // printf("Loading texture from %s\n", pathString.c_str());
+        int channels;
+        GLubyte *pixels = stbi_load(pathString.c_str(), &w, &h, &channels, 4);
+        if (!pixels) {
+            printf("Failed to open texture at %s\n", pathString.c_str());
+            abort();
+        }
+        glTextureStorage2D(TextureID, 1, GL_RGBA8, w, h);
+        glTextureSubImage2D(TextureID, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    }
+    ~Texture() {
+        glDeleteTextures(1, &TextureID);
+    }
+    void Bind(GLuint unit) {
+        glBindTextureUnit(unit, TextureID);
+    }
+};
+
+typedef shared_ptr<Texture> TexturePtr;
+
 class Mesh {
     GLuint VertexArray;
 
     // Attributes
     GLuint PositionBuffer;
     GLuint ColorBuffer;
+    GLuint TexCoordBuffer;
     
     GLuint ElementBuffer;
     GLsizei ElementCount;
@@ -238,6 +271,7 @@ class Mesh {
 public:
     vector<vec3> Positions;
     vector<vec3> Colors;
+    vector<vec2> TexCoords;
     vector<GLuint> Elements;
 
     Mesh() {
@@ -247,14 +281,19 @@ public:
         // Attributes
         glCreateBuffers(1, &PositionBuffer);
         glCreateBuffers(1, &ColorBuffer);
+        glCreateBuffers(1, &TexCoordBuffer);
         glVertexArrayAttribFormat(VertexArray, 0, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribFormat(VertexArray, 1, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribFormat(VertexArray, 2, 2, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribBinding(VertexArray, 0, 0);
         glVertexArrayAttribBinding(VertexArray, 1, 1);
+        glVertexArrayAttribBinding(VertexArray, 2, 2);
         glEnableVertexArrayAttrib(VertexArray, 0);
         glEnableVertexArrayAttrib(VertexArray, 1);
+        glEnableVertexArrayAttrib(VertexArray, 2);
         glVertexArrayVertexBuffer(VertexArray, 0, PositionBuffer, 0, sizeof(Positions[0]));
         glVertexArrayVertexBuffer(VertexArray, 1, ColorBuffer, 0, sizeof(Colors[0])); 
+        glVertexArrayVertexBuffer(VertexArray, 2, TexCoordBuffer, 0, sizeof(TexCoords[0])); 
 
         glVertexArrayElementBuffer(VertexArray, ElementBuffer);    
     }   
@@ -262,6 +301,7 @@ public:
         glDeleteVertexArrays(1, &VertexArray);
         glDeleteBuffers(1, &PositionBuffer);
         glDeleteBuffers(1, &ColorBuffer);
+        glDeleteBuffers(1, &TexCoordBuffer);
     } 
     void UploadToGPU() {
         ElementCount = Elements.size();
@@ -270,6 +310,7 @@ public:
         // Sanity checks
         assert(Positions.size() == VERTEX_COUNT);
         assert(Colors.size() == VERTEX_COUNT);
+        assert(TexCoords.size() == VERTEX_COUNT);
         assert(Elements.size() % 3 == 0);
         for (GLuint element: Elements) {
             assert(element < VERTEX_COUNT);
@@ -279,11 +320,14 @@ public:
         // Attributes
         glNamedBufferData(PositionBuffer, VERTEX_COUNT * sizeof(Positions[0]), Positions.data(), GL_STATIC_DRAW);
         glNamedBufferData(ColorBuffer, VERTEX_COUNT * sizeof(Colors[0]), Colors.data(), GL_STATIC_DRAW);
+        glNamedBufferData(TexCoordBuffer, VERTEX_COUNT * sizeof(TexCoords[0]), TexCoords.data(), GL_STATIC_DRAW);
         
         glNamedBufferData(ElementBuffer, ElementCount * sizeof(GLuint), Elements.data(), GL_STATIC_DRAW);
     }
-    void Draw() {
+    void Bind() {
         glBindVertexArray(VertexArray);
+    }
+    void Draw() {
         glDrawElements(GL_TRIANGLES, ElementCount, GL_UNSIGNED_INT, 0);
     }    
 };
@@ -341,8 +385,7 @@ public:
         glDeleteShader(fragmentShader);
     }
     ~Shader() {
-        if (Program)
-            glDeleteProgram(Program);
+        glDeleteProgram(Program);
     }
     void SetUniform(const char *name, const mat4& value) {
         glProgramUniformMatrix4fv(Program, 
@@ -350,6 +393,12 @@ public:
             1, GL_FALSE, value_ptr(value)
         );
     }
+    void SetUniform(const char *name, GLint value) {
+        glProgramUniform1i(Program, 
+            glGetUniformLocation(Program, name),
+            value
+        );
+    }    
     void Use() {
         glUseProgram(Program);
     }
@@ -360,9 +409,12 @@ typedef shared_ptr<Shader> ShaderPtr;
 
 class Main: public Engine {
     Mesh Triangle, Ground;
+    TexturePtr Brick, Grass;
     ShaderPtr BasicShader;
     FPSCamera Camera;
     mat4 ProjectionMatrix;
+    int Argc;
+    char **Argv;
 
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -370,8 +422,17 @@ class Main: public Engine {
         ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 10.0f);  
         glViewport(0,0, windowSize.x, windowSize.y);
     }
+
+    fs::path GetExecutablePath() {
+        // https://stackoverflow.com/a/55579815
+        return fs::weakly_canonical(fs::path(Argv[0])).parent_path();
+    }
+
+    fs::path GetDataPath() {
+        return GetExecutablePath()/"Data";
+    }
 public:
-    Main(): Camera(Input) {
+    Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         Triangle.Positions = {
             vec3(-1.0f, -1.0f, 0.0f),
             vec3(1.0f, -1.0f, 0.0f),
@@ -384,6 +445,11 @@ public:
         };
         Triangle.Elements = {
             0, 1, 2
+        };
+        Triangle.TexCoords = {
+            vec2(0,0),
+            vec2(1,0),
+            vec2(0.5,1)
         };
         Triangle.UploadToGPU();
 
@@ -400,16 +466,29 @@ public:
             vec3(1,1,1)
         };
         Ground.Elements = {0,1,2,  2,3,0};
+        Ground.TexCoords = {
+            vec2(0,0),
+            vec2(1,0),
+            vec2(1,1),
+            vec2(0,1)
+        };
         Ground.UploadToGPU();
 
+        
+        Brick = make_shared<Texture>(GetDataPath()/"brick.jpg");
+        Grass = make_shared<Texture>(GetDataPath()/"grass.jpg");
+        
         const char *shaderSource = R"glsl(
             uniform mat4 ModelViewProjection;
+            uniform sampler2D DiffuseTexture;
 
             #if defined(VERTEX_SHADER)
                 layout (location=0) in vec3 Position;
                 layout (location=1) in vec3 Color;
+                layout (location=2) in vec2 TexCoords;
                 out VertexData {
                     vec3 Color;
+                    vec2 TexCoords;
                 } vertexData;
 
                 void main() {
@@ -417,16 +496,19 @@ public:
                     gl_Position.w = 1.0f;
                     gl_Position = ModelViewProjection * gl_Position;
                     vertexData.Color = Color;
+                    vertexData.TexCoords = TexCoords;
                 }
             #elif defined(FRAGMENT_SHADER)
                 in VertexData {
                     vec3 Color;
+                    vec2 TexCoords;
                 } vertexData;
 
                 out vec4 color;
 
                 void main() {
-                    color = vec4(vertexData.Color, 1.0f);    
+                    color = texture(DiffuseTexture, vertexData.TexCoords);
+                    color *= vec4(vertexData.Color, 1);
                 }
             #endif
         )glsl";
@@ -450,13 +532,18 @@ public:
         glEnable(GL_DEPTH_TEST);
 
         BasicShader->Use();
+        BasicShader->SetUniform("DiffuseTexture", 0);
+        Brick->Bind(0);
+        Triangle.Bind();
         Triangle.Draw();
+        Grass->Bind(0);
+        Ground.Bind();
         Ground.Draw();        
     }
 };
 
 int main(int argc, char** argv) {
-    Main app;
+    Main app(argc, argv);
     app.Run();
     return 0;
 }
