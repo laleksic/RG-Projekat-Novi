@@ -404,27 +404,13 @@ public:
     }
 };
 
-typedef shared_ptr<Mesh> MeshPtr;
-typedef shared_ptr<Shader> ShaderPtr;
-
-class Main: public Engine {
-    Mesh Triangle, Ground;
-    TexturePtr Brick, Grass;
-    ShaderPtr BasicShader;
-    FPSCamera Camera;
-    mat4 ProjectionMatrix;
-    int Argc;
-    char **Argv;
-    void CalculateViewport() {
-        ivec2 windowSize = Input->GetWindowSize();
-        float aspectRatio = (float)windowSize.x / windowSize.y;
-        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 10.0f);  
-        glViewport(0,0, windowSize.x, windowSize.y);
-    }
+class IOUtils {
+    fs::path ExecutablePath;
+public:
+    IOUtils(fs::path executablePath): ExecutablePath(executablePath) {}
     fs::path GetExecutablePath() const {
-        // https://stackoverflow.com/a/55579815
-        return fs::weakly_canonical(fs::path(Argv[0])).parent_path();
-    }
+        return ExecutablePath;
+    }    
     fs::path GetDataPath() const {
         return GetExecutablePath()/"Data";
     }
@@ -437,8 +423,37 @@ class Main: public Engine {
         printf("Can't open data file %s\n", fileName);
         abort();
     }
+};
+
+typedef shared_ptr<IOUtils> IOUtilsPtr;
+typedef shared_ptr<Mesh> MeshPtr;
+typedef shared_ptr<Shader> ShaderPtr;
+
+class Main: public Engine {
+    Mesh Triangle, Ground;
+    TexturePtr Brick, Grass;
+    ShaderPtr BasicShader;
+    FPSCamera Camera;
+    mat4 ProjectionMatrix;
+    int Argc;
+    char **Argv;
+    IOUtilsPtr IO;
+    
+    void CalculateViewport() {
+        ivec2 windowSize = Input->GetWindowSize();
+        float aspectRatio = (float)windowSize.x / windowSize.y;
+        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 10.0f);  
+        glViewport(0,0, windowSize.x, windowSize.y);
+    }
+    fs::path GetExecutablePath() const {
+        // https://stackoverflow.com/a/55579815
+        return fs::weakly_canonical(fs::path(Argv[0])).parent_path();
+    }
+
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
+        IO = make_shared<IOUtils>(GetExecutablePath());
+
         Triangle.Positions = {
             vec3(-1.0f, -1.0f, 0.0f),
             vec3(1.0f, -1.0f, 0.0f),
@@ -481,8 +496,8 @@ public:
         Ground.UploadToGPU();
 
         
-        Brick = make_shared<Texture>(FindDataFile("brick.jpg"));
-        Grass = make_shared<Texture>(FindDataFile("grass.jpg"));
+        Brick = make_shared<Texture>(IO->FindDataFile("brick.jpg"));
+        Grass = make_shared<Texture>(IO->FindDataFile("grass.jpg"));
         
         const char *shaderSource = R"glsl(
             uniform mat4 ModelViewProjection;
