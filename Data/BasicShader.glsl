@@ -39,26 +39,36 @@ VertexData {
 #elif defined(FRAGMENT_SHADER)
     out vec4 Color;
 
+    float AttenuateLight(float distanceToLight) {
+        const float constant = 1.0f;
+        const float linear = 0.35f;
+        const float quadratic = 0.44f;
+        return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
+    }
+
     void main() {
         vec4 color = vec4(0,0,0,1);
         vec4 diffuseSample = texture(DiffuseTexture, vertexData.TexCoords);
         if (diffuseSample.a < 0.5) {
             discard;
         }
-        for (int i=0; i<16; ++i) {
+
+        vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
+        
+        for (int i=0; i<32; ++i) {
             vec3 toLight = Lights[i].Position - vertexData.WorldSpacePosition;
-            float distanceToLightSqr = length(toLight)*length(toLight);
-            float lambertFactor = max(0,dot(normalize(toLight), normalize(vertexData.WorldSpaceNormal)));
-            float arbitraryFactor = 8;
-            float attenuation = 1/distanceToLightSqr * arbitraryFactor;
-            float diffuseStrength = attenuation * lambertFactor;
-            color += (diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample);
+            float distanceToLight = length(toLight);
+            float lambertFactor = max(0,dot(normalize(toLight), vertexData.WorldSpaceNormal));
+            float attenuation = AttenuateLight(distanceToLight);
+            float diffuseStrength = lambertFactor;
+
+            vec3 halfway = (normalize(toCamera)+normalize(toLight))*0.5;
+            float specularStrength = max(0,dot(halfway,vertexData.WorldSpaceNormal));
+            specularStrength = pow(specularStrength, 32);
+
+            // diffuseStrength = 0;
+            color += attenuation * (diffuseStrength + specularStrength) * vec4(Lights[i].Color,1) * diffuseSample;
         }
         Color = color;
-
-        //vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
-        //float lambertFactor = max(0,dot(normalize(toCamera), normalize(vertexData.WorldSpaceNormal)));
-        //Color = vec4(lambertFactor.xxx, 1);
-        //Color = vec4((vertexData.WorldSpaceNormal),1);
     }
 #endif
