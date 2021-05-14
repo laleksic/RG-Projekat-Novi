@@ -8,6 +8,8 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/IOStream.hpp>
+#include <assimp/IOSystem.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <array>
@@ -209,8 +211,8 @@ public:
         glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
             GLenum severity, GLsizei length, const GLchar *message,
             const void *userParam) {
-                fprintf(stdout, "GL debug message: %s\n", message);
                 if (type == GL_DEBUG_TYPE_ERROR) {
+                    fprintf(stdout, "GL error: %s\n", message);
                     abort();
                 }
         }, 0);
@@ -271,6 +273,7 @@ class Mesh {
     GLuint PositionBuffer;
     GLuint ColorBuffer;
     GLuint TexCoordBuffer;
+    GLuint NormalBuffer;
     
     GLuint ElementBuffer;
     GLsizei ElementCount;
@@ -279,6 +282,7 @@ public:
     vector<vec3> Positions;
     vector<vec3> Colors;
     vector<vec2> TexCoords;
+    vector<vec3> Normals;
     vector<GLuint> Elements;
 
     Mesh() {
@@ -289,18 +293,23 @@ public:
         glCreateBuffers(1, &PositionBuffer);
         glCreateBuffers(1, &ColorBuffer);
         glCreateBuffers(1, &TexCoordBuffer);
+        glCreateBuffers(1, &NormalBuffer);
         glVertexArrayAttribFormat(VertexArray, 0, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribFormat(VertexArray, 1, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribFormat(VertexArray, 2, 2, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribFormat(VertexArray, 3, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribBinding(VertexArray, 0, 0);
         glVertexArrayAttribBinding(VertexArray, 1, 1);
         glVertexArrayAttribBinding(VertexArray, 2, 2);
+        glVertexArrayAttribBinding(VertexArray, 3, 3);
         glEnableVertexArrayAttrib(VertexArray, 0);
         glEnableVertexArrayAttrib(VertexArray, 1);
         glEnableVertexArrayAttrib(VertexArray, 2);
+        glEnableVertexArrayAttrib(VertexArray, 3);
         glVertexArrayVertexBuffer(VertexArray, 0, PositionBuffer, 0, sizeof(Positions[0]));
         glVertexArrayVertexBuffer(VertexArray, 1, ColorBuffer, 0, sizeof(Colors[0])); 
         glVertexArrayVertexBuffer(VertexArray, 2, TexCoordBuffer, 0, sizeof(TexCoords[0])); 
+        glVertexArrayVertexBuffer(VertexArray, 3, NormalBuffer, 0, sizeof(Normals[0])); 
 
         glVertexArrayElementBuffer(VertexArray, ElementBuffer);    
     }   
@@ -309,6 +318,7 @@ public:
         glDeleteBuffers(1, &PositionBuffer);
         glDeleteBuffers(1, &ColorBuffer);
         glDeleteBuffers(1, &TexCoordBuffer);
+        glDeleteBuffers(1, &NormalBuffer);
     } 
     void UploadToGPU() {
         ElementCount = Elements.size();
@@ -318,6 +328,7 @@ public:
         assert(Positions.size() == VERTEX_COUNT);
         assert(Colors.size() == VERTEX_COUNT);
         assert(TexCoords.size() == VERTEX_COUNT);
+        assert(Normals.size() == VERTEX_COUNT);
         assert(Elements.size() % 3 == 0);
         for (GLuint element: Elements) {
             assert(element < VERTEX_COUNT);
@@ -328,6 +339,7 @@ public:
         glNamedBufferData(PositionBuffer, VERTEX_COUNT * sizeof(Positions[0]), Positions.data(), GL_STATIC_DRAW);
         glNamedBufferData(ColorBuffer, VERTEX_COUNT * sizeof(Colors[0]), Colors.data(), GL_STATIC_DRAW);
         glNamedBufferData(TexCoordBuffer, VERTEX_COUNT * sizeof(TexCoords[0]), TexCoords.data(), GL_STATIC_DRAW);
+        glNamedBufferData(NormalBuffer, VERTEX_COUNT * sizeof(Normals[0]), Normals.data(), GL_STATIC_DRAW);
         
         glNamedBufferData(ElementBuffer, ElementCount * sizeof(GLuint), Elements.data(), GL_STATIC_DRAW);
     }
@@ -441,9 +453,10 @@ public:
         return GetExecutablePath()/"Data";
     }
     fs::path FindDataFile(string fileName) const {
+        fileName = fs::path(fileName).filename().string();
         fs::path outPath;
         if (!TryFindDataFile(GetDataPath(), fileName, outPath)) {
-            printf("Can't open data file %s\n", fileName);
+            printf("Can't open data file %s\n", fileName.c_str());
             abort();
         }
         return outPath;
@@ -462,6 +475,87 @@ public:
     }
 };
 
+class AssimpReadOnlyIOStream: public Assimp::IOStream {
+    FILE *Fp;
+public:
+    AssimpReadOnlyIOStream(string path) {
+        Fp = fopen(path.c_str(), "r");
+        if (!Fp) {
+            printf("Failed to open %s\n", path.c_str());
+            abort();
+        }
+    }
+    void Close() {
+        if (Fp)
+            fclose(Fp);
+        Fp = 0;
+    }
+    ~AssimpReadOnlyIOStream() {
+        Close();
+    }
+    virtual size_t FileSize() const override {
+        assert(Fp);
+        fseek(Fp, 0, SEEK_END);
+        long rv = ftell(Fp);
+        rewind(Fp);
+        return rv;
+    }
+    virtual void Flush() override { }
+    virtual size_t Read(void *pvBuffer, size_t pSize, size_t pCount) override {
+        assert(Fp);
+        return fread(pvBuffer, pSize, pCount, Fp);
+    }
+    virtual aiReturn Seek(size_t pOffset, aiOrigin pOrigin) override {
+        assert(Fp);
+        int origin;
+        switch (pOrigin) {
+            case aiOrigin_CUR: origin = SEEK_CUR; break;
+            case aiOrigin_END: origin = SEEK_END; break;
+            case aiOrigin_SET: origin = SEEK_SET; break;
+            default: abort();
+        }
+        return (aiReturn)fseek(Fp, pOffset, origin);
+    }
+    virtual size_t Tell() const override {
+        assert(Fp);
+        return ftell(Fp);
+    }
+    virtual size_t Write(const void *pvBuffer, size_t pSize, size_t pCount) override {
+        return 0;
+    }
+};
+
+typedef shared_ptr<IOUtils> IOUtilsPtr;
+
+
+class AssimpReadOnlyIOSystem: public Assimp::IOSystem {
+    IOUtilsPtr IO;
+public:
+    AssimpReadOnlyIOSystem(IOUtilsPtr io): IO(io) {}
+    virtual void Close(Assimp::IOStream *pFile) override {
+        //((AssimpReadOnlyIOStream*)pFile)->Close();
+        delete pFile;
+    }
+    virtual bool ComparePaths (const char *one, const char *second) const override {
+        fs::path p0(one);
+        fs::path p1(second);
+        return fs::equivalent(p0, p1);
+    }
+    virtual bool Exists (const char *pFile) const override {
+        return fs::exists(fs::path(pFile));
+    }
+    virtual char getOsSeparator () const override {
+        return fs::path::preferred_separator;
+    }
+    virtual Assimp::IOStream* Open (const char *pFile, const char *pMode="rb") {
+        if (fs::path(pFile).is_absolute()) {
+            return new AssimpReadOnlyIOStream(string(pFile));
+        } 
+        fs::path path = IO->FindDataFile(string(pFile));
+        return new AssimpReadOnlyIOStream(path.string());
+    }
+};
+
 class RandomNumberGenerator {
 public:
     RandomNumberGenerator() {
@@ -475,7 +569,6 @@ public:
     }
 };
 
-typedef shared_ptr<IOUtils> IOUtilsPtr;
 typedef shared_ptr<Mesh> MeshPtr;
 typedef shared_ptr<Shader> ShaderPtr;
 
@@ -486,27 +579,50 @@ public:
 
     Model(fs::path path, IOUtilsPtr IO) {
         Assimp::Importer importer;
+        //AssimpReadOnlyIOSystem ioHandler(IO);
+        //importer.SetIOHandler(&ioHandler);
         string pathString = path.string();
         unsigned flags = 0;
         flags |= aiProcess_Triangulate;
         flags |= aiProcess_PreTransformVertices;
         flags |= aiProcess_FlipUVs;
+        //flags |= aiProcess_GenNormals;
+        // flags |= aiProcess_ForceGenNormals;
+        // flags |= aiProcess_FixInfacingNormals;
+        // flags |= aiProcess_FindInvalidData;
+        // flags |= aiProcess_GenUVCoords;
         const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
+        // scene = importer.ApplyPostProcessing(aiProcess_GenNormals);
         if (!scene) {
-            printf("Couldn't load %s!\n", path);
+            printf("Couldn't load %s!\n", pathString.c_str());
             abort();
         }
         for (int i=0; i<scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
+            if (!mesh->HasNormals()) {
+                printf("Malformed (no normals) mesh in %s\n", pathString.c_str());
+                abort();
+            }
+            if (!mesh->HasPositions()) {
+                printf("Malformed (no positions) mesh in %s\n", pathString.c_str());
+                abort();
+            }
+            if (!mesh->HasTextureCoords(0)) {
+                printf("Malformed (no texcoords) mesh in %s\n", pathString.c_str());
+                abort();
+            }
             MeshPtr meshp = make_shared<Mesh>();
             meshp->Positions.resize(mesh->mNumVertices);
             meshp->Colors.resize(mesh->mNumVertices);
             meshp->TexCoords.resize(mesh->mNumVertices);
+            meshp->Normals.resize(mesh->mNumVertices);
+
             meshp->Elements.reserve(mesh->mNumFaces * 3);
             for (int j=0; j<mesh->mNumVertices; ++j) {
                 meshp->Positions[j] = vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
                 meshp->Colors[j] = vec3(1,1,1);
                 meshp->TexCoords[j] = vec2(mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y);
+                meshp->Normals[j] = vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
             }
             for (int j=0; j<mesh->mNumFaces; ++j) {
                 meshp->Elements.push_back(mesh->mFaces[j].mIndices[0]);
@@ -519,7 +635,12 @@ public:
             aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
             aiString diffuseMapPath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
-            TexturePtr diffuseMap = make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str()));
+            TexturePtr diffuseMap;
+            if (diffuseMapPath != aiString("")) {
+                diffuseMap = make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str()));
+            } else {
+                diffuseMap = make_shared<Texture>(IO->FindDataFile("white.png"));
+            }
             DiffuseTextures.push_back(diffuseMap);
         }        
     }
@@ -547,7 +668,7 @@ class Main: public Engine {
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
-        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 50.0f);  
+        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
         glViewport(0,0, windowSize.x, windowSize.y);
     }
     fs::path GetExecutablePath() const {
@@ -558,7 +679,8 @@ class Main: public Engine {
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         IO = make_shared<IOUtils>(GetExecutablePath());
-        Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
+        // Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
+        Sponza = make_shared<Model>(IO->FindDataFile("sponza.obj"), IO);
         BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("BasicShader.glsl"));
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
@@ -568,9 +690,9 @@ public:
         for (int i=0; i<LIGHT_COUNT; ++i) {
             Light light;
             light.Position = vec3(
-                RNG.RandomFloat(-25, 25),
-                RNG.RandomFloat(-25, 25),
-                RNG.RandomFloat(-25, 25)
+                RNG.RandomFloat(-7.5, 7.5),
+                RNG.RandomFloat(0, 7.5),
+                RNG.RandomFloat(-15, 5)
             );
             light.Color = vec3(
                 RNG.RandomFloat(),
@@ -587,8 +709,11 @@ public:
 
         Camera.Update();
 
-        mat4 modelViewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
+        mat4 modelMatrix = scale(vec3(0.01f));
+        mat4 viewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
+        mat4 modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
         BasicShader->SetUniform("ModelViewProjection", modelViewProjectionMatrix);
+        BasicShader->SetUniform("Model", modelMatrix);
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -4,18 +4,27 @@ struct Light {
 };
 
 uniform mat4 ModelViewProjection;
+uniform mat4 Model;
 uniform sampler2D DiffuseTexture;
 uniform Light Lights[32];
+
+#if defined(VERTEX_SHADER)
+out
+#elif defined(FRAGMENT_SHADER)
+in
+#endif
+VertexData {
+    vec3 Color;
+    vec2 TexCoords;
+    vec3 WorldSpacePosition;
+    vec3 WorldSpaceNormal;
+} vertexData;
 
 #if defined(VERTEX_SHADER)
     layout (location=0) in vec3 Position;
     layout (location=1) in vec3 Color;
     layout (location=2) in vec2 TexCoords;
-    out VertexData {
-        vec3 Color;
-        vec2 TexCoords;
-        vec3 WorldSpacePosition;
-    } vertexData;
+    layout (location=3) in vec3 Normal;
 
     void main() {
         gl_Position.xyz = Position;
@@ -23,15 +32,10 @@ uniform Light Lights[32];
         gl_Position = ModelViewProjection * gl_Position;
         vertexData.Color = Color;
         vertexData.TexCoords = TexCoords;
-        vertexData.WorldSpacePosition = Position;
+        vertexData.WorldSpacePosition = vec3(Model * vec4(Position, 1));
+        vertexData.WorldSpaceNormal = normalize(vec3(Model * vec4(Normal, 0)));
     }
 #elif defined(FRAGMENT_SHADER)
-    in VertexData {
-        vec3 Color;
-        vec2 TexCoords;
-        vec3 WorldSpacePosition;
-    } vertexData;
-
     out vec4 Color;
 
     void main() {
@@ -43,12 +47,13 @@ uniform Light Lights[32];
         for (int i=0; i<32; ++i) {
             vec3 toLight = Lights[i].Position - vertexData.WorldSpacePosition;
             float distanceToLightSqr = length(toLight)*length(toLight);
-            //float lambertFactor = ;
+            float lambertFactor = max(0,dot(normalize(toLight), normalize(vertexData.WorldSpaceNormal)));
             float arbitraryFactor = 8;
             float attenuation = 1/distanceToLightSqr * arbitraryFactor;
-            float diffuseStrength = attenuation;
+            float diffuseStrength = attenuation * lambertFactor;
             color += (diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample);
         }
         Color = color;
+        //Color = vec4((vertexData.WorldSpaceNormal),1);
     }
 #endif
