@@ -9,8 +9,7 @@ find_package(glm REQUIRED)
 find_package(assimp REQUIRED)
 target_link_libraries(RG-Projekat glfw glm assimp)
 
-add_custom_command(
-        TARGET RG-Projekat POST_BUILD
+add_custom_target(DataFolder ALL
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 ${CMAKE_SOURCE_DIR}/Data
                 ${CMAKE_CURRENT_BINARY_DIR}/Data)

@@ -394,18 +394,24 @@ public:
     ~Shader() {
         glDeleteProgram(Program);
     }
-    void SetUniform(const char *name, const mat4& value) {
+    void SetUniform(string name, const mat4& value) {
         glProgramUniformMatrix4fv(Program, 
-            glGetUniformLocation(Program, name),
+            glGetUniformLocation(Program, name.c_str()),
             1, GL_FALSE, value_ptr(value)
         );
     }
-    void SetUniform(const char *name, GLint value) {
+    void SetUniform(string name, GLint value) {
         glProgramUniform1i(Program, 
-            glGetUniformLocation(Program, name),
+            glGetUniformLocation(Program, name.c_str()),
             value
         );
     }    
+    void SetUniform(string name, vec3 value) {
+        glProgramUniform3fv(Program,
+            glGetUniformLocation(Program, name.c_str()),
+            1, value_ptr(value)
+        );
+    }
     void Use() {
         glUseProgram(Program);
     }
@@ -453,6 +459,19 @@ public:
         fread(&contents[0], 1, contents.size(), fp);
         fclose(fp);
         return contents;
+    }
+};
+
+class RandomNumberGenerator {
+public:
+    RandomNumberGenerator() {
+        srand(time(0));
+    }
+    float RandomFloat() {
+        return rand() / (float)RAND_MAX;
+    }
+    float RandomFloat(float lo, float hi) {
+        return lo + RandomFloat() * (hi-lo);
     }
 };
 
@@ -506,6 +525,12 @@ public:
     }
 };
 
+class Light {
+public:
+    vec3 Position;
+    vec3 Color;
+};
+
 typedef shared_ptr<Model> ModelPtr;
 
 class Main: public Engine {
@@ -516,6 +541,8 @@ class Main: public Engine {
     int Argc;
     char **Argv;
     IOUtilsPtr IO;
+    RandomNumberGenerator RNG;
+    vector<Light> Lights;
     
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -536,6 +563,22 @@ public:
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
+
+        const int LIGHT_COUNT = 32;
+        for (int i=0; i<LIGHT_COUNT; ++i) {
+            Light light;
+            light.Position = vec3(
+                RNG.RandomFloat(-25, 25),
+                RNG.RandomFloat(-25, 25),
+                RNG.RandomFloat(-25, 25)
+            );
+            light.Color = vec3(
+                RNG.RandomFloat(),
+                RNG.RandomFloat(),
+                RNG.RandomFloat()
+            );
+            Lights.push_back(light);
+        }
     }
     virtual void OnFrame() override final {
         if (Input->WasWindowResized()) {
@@ -551,8 +594,12 @@ public:
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
 
-        BasicShader->Use();
+        BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
+        for (int i=0; i<Lights.size(); ++i) {
+            BasicShader->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
+            BasicShader->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
+        }
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
             Sponza->DiffuseTextures[i]->Bind(0);
             Sponza->Meshes[i]->Bind();
