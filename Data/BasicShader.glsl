@@ -7,6 +7,7 @@ uniform mat4 ModelViewProjection;
 uniform mat4 Model;
 uniform sampler2D DiffuseTexture;
 uniform Light Lights[32];
+uniform vec3 CameraPosition;
 
 #if defined(VERTEX_SHADER)
 out
@@ -44,7 +45,7 @@ VertexData {
         if (diffuseSample.a < 0.5) {
             discard;
         }
-        for (int i=0; i<32; ++i) {
+        for (int i=0; i<16; ++i) {
             vec3 toLight = Lights[i].Position - vertexData.WorldSpacePosition;
             float distanceToLightSqr = length(toLight)*length(toLight);
             float lambertFactor = max(0,dot(normalize(toLight), normalize(vertexData.WorldSpaceNormal)));
@@ -54,6 +55,10 @@ VertexData {
             color += (diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample);
         }
         Color = color;
+
+        //vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
+        //float lambertFactor = max(0,dot(normalize(toCamera), normalize(vertexData.WorldSpaceNormal)));
+        //Color = vec4(lambertFactor.xxx, 1);
         //Color = vec4((vertexData.WorldSpaceNormal),1);
     }
 #endif
