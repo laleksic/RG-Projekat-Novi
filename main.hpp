@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
+#include <glm/gtx/compatibility.hpp>
 #include <glfw/glfw3.h>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -21,6 +22,7 @@
 #include <memory>
 #include <filesystem>
 #include <map>
+#include <iostream>
 using namespace glm;
 using namespace std;
 namespace fs = filesystem;

@@ -486,7 +486,8 @@ public:
     fs::path GetDataPath() const {
         return GetExecutablePath()/"Data";
     }
-    fs::path FindDataFile(string fileName) const {
+    fs::path FindDataFile(fs::path fileName) const {
+        /*
         fileName = fs::path(fileName).filename().string();
         fs::path outPath;
         if (!TryFindDataFile(GetDataPath(), fileName, outPath)) {
@@ -494,6 +495,13 @@ public:
             abort();
         }
         return outPath;
+        */
+        fs::path fullPath = GetDataPath()/fileName;
+        if (fs::exists(fullPath)) {
+            return fullPath;
+        }
+        cerr << "Can't open data file " << fullPath << endl;
+        abort();       
     }    
     string LoadDataFileAsString(string fileName) const {
         fs::path path = FindDataFile(fileName);
@@ -609,10 +617,9 @@ class TextureLoader {
 public:
     TextureLoader(IOUtilsPtr io): IO(io){}
     TexturePtr Load(fs::path path) {
-        path = path.filename();
         auto it = LoadedTextures.find(path);
         if (it == LoadedTextures.end()) {
-            fs::path found = IO->FindDataFile(path.string());
+            fs::path found = IO->FindDataFile(path);
             TexturePtr texture = make_shared<Texture>(found);
             LoadedTextures[path] = texture;
             return texture;
@@ -701,9 +708,9 @@ public:
             material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
             material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
             material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
-            diffuseMapPath = (diffuseMapPath.length==0)?aiString("white.png"):diffuseMapPath;
-            specularMapPath = (specularMapPath.length==0)?aiString("black.png"):specularMapPath;
-            normalMapPath = (normalMapPath.length==0)?aiString("blankNormal.png"):normalMapPath;
+            diffuseMapPath = (diffuseMapPath.length==0)?aiString("textures/white.png"):diffuseMapPath;
+            specularMapPath = (specularMapPath.length==0)?aiString("textures/black.png"):specularMapPath;
+            normalMapPath = (normalMapPath.length==0)?aiString("textures/blankNormal.png"):normalMapPath;
             DiffuseTextures.push_back(textureLoader->Load(diffuseMapPath.C_Str()));
             SpecularTextures.push_back(textureLoader->Load(specularMapPath.C_Str()));
             NormalTextures.push_back(textureLoader->Load(normalMapPath.C_Str()));
@@ -729,7 +736,8 @@ class Main: public Engine {
     IOUtilsPtr IO;
     TextureLoaderPtr TexLoader;
     RandomNumberGenerator RNG;
-    vector<Light> Lights;
+    vector<Light> Lights[2];
+    float lightLerp = 0.0f;
 
     bool UseNormalMaps = false;
     bool VisualizeNormals = false;
@@ -753,13 +761,14 @@ public:
         IO = make_shared<IOUtils>(GetExecutablePath());
         TexLoader = make_shared<TextureLoader>(IO);
         // Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
-        Sponza = make_shared<Model>(IO->FindDataFile("sponza.obj"), TexLoader);
-        BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("BasicShader.glsl"));
+        Sponza = make_shared<Model>(IO->FindDataFile("models/sponza.obj"), TexLoader);
+        BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/BasicShader.glsl"));
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
 
         const int LIGHT_COUNT = 32;
+        for (int j=0; j<2; ++j) {
         for (int i=0; i<LIGHT_COUNT; ++i) {
             Light light;
             light.Position = vec3(
@@ -772,7 +781,8 @@ public:
                 RNG.RandomFloat(),
                 RNG.RandomFloat()
             );
-            Lights.push_back(light);
+            Lights[j].push_back(light);
+        }
         }
     }
     virtual void OnFrame() override final {
@@ -808,10 +818,15 @@ public:
         BasicShader->SetUniform("DiffuseTexture", 0);  
         BasicShader->SetUniform("SpecularTexture", 1);  
         BasicShader->SetUniform("NormalTexture", 2);  
-        for (int i=0; i<Lights.size(); ++i) {
-            BasicShader->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
-            BasicShader->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
+        for (int i=0; i<Lights[0].size(); ++i) {
+            vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
+            vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
+            BasicShader->SetUniform("Lights["+to_string(i)+"].Position", lightPosition);
+            BasicShader->SetUniform("Lights["+to_string(i)+"].Color", lightColor);
         }
+        BasicShader->SetUniform("AmbientLight", vec3(0.075,0.075,0.125));
+        lightLerp = (sin(glfwGetTime())+1.0)/2.0;
+
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
             Sponza->DiffuseTextures[i]->Bind(0);
             Sponza->SpecularTextures[i]->Bind(1);

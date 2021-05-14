@@ -10,6 +10,7 @@ uniform sampler2D SpecularTexture;
 uniform sampler2D NormalTexture;
 uniform Light Lights[32];
 uniform vec3 CameraPosition;
+uniform vec3 AmbientLight;
 uniform bool UseNormalMaps;
 uniform bool VisualizeNormals;
 uniform bool UseSpecular;
@@ -106,6 +107,7 @@ VertexData {
             if (UseSpecular)
                 color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
         }
+        color += vec4(AmbientLight,1) * diffuseSample;
         Color = color;
         
         if (VisualizeNormals)
