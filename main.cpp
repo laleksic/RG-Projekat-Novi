@@ -243,6 +243,7 @@ public:
 
 class Texture {
     GLuint TextureID;
+    bool HasAlphaChannel = false;
 
 public:
     Texture(fs::path path) {
@@ -256,6 +257,8 @@ public:
             fprintf(stderr, "Failed to open texture at %s\n", pathString.c_str());
             abort();
         }
+        if (channels == 4)
+            HasAlphaChannel = true;
         int levels = std::max(1, (int)log2((double)w));
         glTextureParameteri(TextureID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(TextureID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
@@ -269,6 +272,7 @@ public:
     void Bind(GLuint unit) {
         glBindTextureUnit(unit, TextureID);
     }
+    bool ShouldAlphaClip() const { return HasAlphaChannel; }
 };
 
 typedef shared_ptr<Texture> TexturePtr;
@@ -828,6 +832,14 @@ public:
         lightLerp = (sin(glfwGetTime())+1.0)/2.0;
 
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
+            if (Sponza->DiffuseTextures[i]->ShouldAlphaClip()) {
+                glDisable(GL_CULL_FACE);
+                BasicShader->SetUniform("Translucent", true);
+            } else {
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_BACK);
+                BasicShader->SetUniform("Translucent", false);
+            }
             Sponza->DiffuseTextures[i]->Bind(0);
             Sponza->SpecularTextures[i]->Bind(1);
             Sponza->NormalTextures[i]->Bind(2);

@@ -16,6 +16,7 @@ uniform bool VisualizeNormals;
 uniform bool UseSpecular;
 uniform bool HighlightZeroNormals;
 uniform bool NormalizeAfterConvertingToWorldSpace;
+uniform bool Translucent;
 
 #if defined(VERTEX_SHADER)
 out
@@ -88,6 +89,7 @@ VertexData {
             normal = normalize(vertexData.WorldSpaceNormal);
         }
 
+        
 
         vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
         
@@ -95,6 +97,10 @@ VertexData {
             vec3 toLight = Lights[i].Position - vertexData.WorldSpacePosition;
             float distanceToLight = length(toLight);
             float lambertFactor = max(0,dot(normalize(toLight), normal));
+            if (Translucent) {
+                float lambertFactorBack = max(0,dot(normalize(toLight), -normal));
+                lambertFactor = max(lambertFactor, lambertFactorBack);
+            }
             float attenuation = AttenuateLight(distanceToLight);
             float diffuseStrength = lambertFactor;
 
