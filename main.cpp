@@ -642,6 +642,7 @@ public:
     vector<TexturePtr> DiffuseTextures;
     vector<TexturePtr> SpecularTextures;
     vector<TexturePtr> NormalTextures;
+    vector<TexturePtr> BumpTextures;
 
     Model(fs::path path, TextureLoaderPtr textureLoader) {
         Assimp::Importer importer;
@@ -708,16 +709,19 @@ public:
             Meshes.push_back(meshp);
 
             aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
-            aiString diffuseMapPath, specularMapPath, normalMapPath;
+            aiString diffuseMapPath, specularMapPath, normalMapPath, bumpMapPath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
             material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
             material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
+            material->GetTexture(aiTextureType_HEIGHT, 0, &bumpMapPath);
             diffuseMapPath = (diffuseMapPath.length==0)?aiString("textures/white.png"):diffuseMapPath;
             specularMapPath = (specularMapPath.length==0)?aiString("textures/black.png"):specularMapPath;
             normalMapPath = (normalMapPath.length==0)?aiString("textures/blankNormal.png"):normalMapPath;
+            bumpMapPath = (bumpMapPath.length==0)?aiString("textures/white.png"):bumpMapPath;
             DiffuseTextures.push_back(textureLoader->Load(diffuseMapPath.C_Str()));
             SpecularTextures.push_back(textureLoader->Load(specularMapPath.C_Str()));
             NormalTextures.push_back(textureLoader->Load(normalMapPath.C_Str()));
+            BumpTextures.push_back(textureLoader->Load(bumpMapPath.C_Str()));
         }        
     }
 };
@@ -748,6 +752,7 @@ class Main: public Engine {
     bool UseSpecular = true;
     bool HighlightZeroNormals = true;
     bool NormalizeAfterConvertingToWorldSpace = true;
+    bool VisualizeBumpMap = false;
     
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -812,16 +817,19 @@ public:
         ImGui::Checkbox("Use Specular", &UseSpecular);       
         ImGui::Checkbox("Highlight Zero Normals", &HighlightZeroNormals);       
         ImGui::Checkbox("Normalize After Converting To World Space", &NormalizeAfterConvertingToWorldSpace);       
+        ImGui::Checkbox("Visualize Bump Map", &VisualizeBumpMap);       
         BasicShader->SetUniform("UseNormalMaps", UseNormalMaps);
         BasicShader->SetUniform("VisualizeNormals", VisualizeNormals);
         BasicShader->SetUniform("UseSpecular", UseSpecular);
         BasicShader->SetUniform("HighlightZeroNormals", HighlightZeroNormals);
         BasicShader->SetUniform("NormalizeAfterConvertingToWorldSpace", NormalizeAfterConvertingToWorldSpace);
+        BasicShader->SetUniform("VisualizeBumpMap", VisualizeBumpMap);
 
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
         BasicShader->SetUniform("SpecularTexture", 1);  
         BasicShader->SetUniform("NormalTexture", 2);  
+        BasicShader->SetUniform("BumpTexture", 3);  
         for (int i=0; i<Lights[0].size(); ++i) {
             vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
             vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
@@ -843,6 +851,7 @@ public:
             Sponza->DiffuseTextures[i]->Bind(0);
             Sponza->SpecularTextures[i]->Bind(1);
             Sponza->NormalTextures[i]->Bind(2);
+            Sponza->BumpTextures[i]->Bind(3);
             Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
         }     

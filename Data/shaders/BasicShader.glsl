@@ -8,6 +8,7 @@ uniform mat4 Model;
 uniform sampler2D DiffuseTexture;
 uniform sampler2D SpecularTexture;
 uniform sampler2D NormalTexture;
+uniform sampler2D BumpTexture;
 uniform Light Lights[32];
 uniform vec3 CameraPosition;
 uniform vec3 AmbientLight;
@@ -17,6 +18,7 @@ uniform bool UseSpecular;
 uniform bool HighlightZeroNormals;
 uniform bool NormalizeAfterConvertingToWorldSpace;
 uniform bool Translucent;
+uniform bool VisualizeBumpMap;
 
 #if defined(VERTEX_SHADER)
 out
@@ -68,6 +70,11 @@ VertexData {
 
     void main() {
         vec4 color = vec4(0,0,0,1);
+        vec4 bumpSample = texture(BumpTexture, vertexData.TexCoords);
+
+        // todo parallax mapping here
+        // ...
+
         vec4 diffuseSample = texture(DiffuseTexture, vertexData.TexCoords);
         vec4 specularSample = texture(SpecularTexture, vertexData.TexCoords);
         vec4 normalSample = texture(NormalTexture, vertexData.TexCoords);
@@ -118,9 +125,12 @@ VertexData {
         
         if (VisualizeNormals)
             Color = vec4((normal+vec3(1))/2, 1);
+        else if (VisualizeBumpMap)
+            Color = bumpSample;
 
         if (length(normal) < 0.1 && HighlightZeroNormals)
             Color = vec4(1,0,0,1);
+
         //Color = normalSample;
     }
 #endif
