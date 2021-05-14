@@ -6,6 +6,7 @@ struct Light {
 uniform mat4 ModelViewProjection;
 uniform mat4 Model;
 uniform sampler2D DiffuseTexture;
+uniform sampler2D SpecularTexture;
 uniform Light Lights[32];
 uniform vec3 CameraPosition;
 
@@ -41,14 +42,15 @@ VertexData {
 
     float AttenuateLight(float distanceToLight) {
         const float constant = 1.0f;
-        const float linear = 0.35f;
-        const float quadratic = 0.44f;
+        const float linear = 0.22f;//0.35f;
+        const float quadratic = 0.20f;//0.44f;
         return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
     }
 
     void main() {
         vec4 color = vec4(0,0,0,1);
         vec4 diffuseSample = texture(DiffuseTexture, vertexData.TexCoords);
+        vec4 specularSample = texture(SpecularTexture, vertexData.TexCoords);
         if (diffuseSample.a < 0.5) {
             discard;
         }
@@ -67,7 +69,8 @@ VertexData {
             specularStrength = pow(specularStrength, 32);
 
             // diffuseStrength = 0;
-            color += attenuation * (diffuseStrength + specularStrength) * vec4(Lights[i].Color,1) * diffuseSample;
+            color += attenuation * diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample;
+            color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
         }
         Color = color;
     }

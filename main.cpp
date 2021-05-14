@@ -192,7 +192,7 @@ public:
     InputMasterPtr Input;
     Engine() {
         glfwSetErrorCallback([](int code, const char *msg){
-            fprintf(stdout, "GLFW error (%d): %s\n", code, msg);
+            fprintf(stderr, "GLFW error (%d): %s\n", code, msg);
             abort();
         });
         glfwInit();
@@ -212,7 +212,7 @@ public:
             GLenum severity, GLsizei length, const GLchar *message,
             const void *userParam) {
                 if (type == GL_DEBUG_TYPE_ERROR) {
-                    fprintf(stdout, "GL error: %s\n", message);
+                    fprintf(stderr, "GL error: %s\n", message);
                     abort();
                 }
         }, 0);
@@ -242,11 +242,11 @@ public:
         glCreateTextures(GL_TEXTURE_2D, 1, &TextureID);
         int w, h;
         string pathString = path.string();
-        printf("Loading texture from %s\n", pathString.c_str());
+        fprintf(stderr, "Loading texture from %s\n", pathString.c_str());
         int channels;
         GLubyte *pixels = stbi_load(pathString.c_str(), &w, &h, &channels, 4);
         if (!pixels) {
-            printf("Failed to open texture at %s\n", pathString.c_str());
+            fprintf(stderr, "Failed to open texture at %s\n", pathString.c_str());
             abort();
         }
         int levels = std::max(1, (int)log2((double)w));
@@ -378,7 +378,7 @@ public:
             glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetShaderInfoLog(vertexShader, bufSize, 0, &buf[0]);
-            printf("Vertex shader error: %s\n", buf);
+            fprintf(stderr, "Vertex shader error: %s\n", buf);
             abort();
         }
         glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &ok);
@@ -387,7 +387,7 @@ public:
             glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetShaderInfoLog(fragmentShader, bufSize, 0, &buf[0]);
-            printf("Fragment shader error: %s\n", buf);
+            fprintf(stderr, "Fragment shader error: %s\n", buf);
             abort();
         }
         glGetProgramiv(Program, GL_LINK_STATUS, &ok);
@@ -396,7 +396,7 @@ public:
             glGetProgramiv(Program, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetProgramInfoLog(Program, bufSize, 0, &buf[0]);
-            printf("Shader linking error: %s\n", buf);
+            fprintf(stderr, "Shader linking error: %s\n", buf);
             abort();
         }
 
@@ -456,7 +456,7 @@ public:
         fileName = fs::path(fileName).filename().string();
         fs::path outPath;
         if (!TryFindDataFile(GetDataPath(), fileName, outPath)) {
-            printf("Can't open data file %s\n", fileName.c_str());
+            fprintf(stderr, "Can't open data file %s\n", fileName.c_str());
             abort();
         }
         return outPath;
@@ -481,7 +481,7 @@ public:
     AssimpReadOnlyIOStream(string path) {
         Fp = fopen(path.c_str(), "r");
         if (!Fp) {
-            printf("Failed to open %s\n", path.c_str());
+            fprintf(stderr, "Failed to open %s\n", path.c_str());
             abort();
         }
     }
@@ -576,6 +576,7 @@ class Model {
 public:
     vector<MeshPtr> Meshes;
     vector<TexturePtr> DiffuseTextures;
+    vector<TexturePtr> SpecularTextures;
 
     Model(fs::path path, IOUtilsPtr IO) {
         Assimp::Importer importer;
@@ -594,21 +595,21 @@ public:
         const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
         // scene = importer.ApplyPostProcessing(aiProcess_GenNormals);
         if (!scene) {
-            printf("Couldn't load %s!\n", pathString.c_str());
+            fprintf(stderr, "Couldn't load %s!\n", pathString.c_str());
             abort();
         }
         for (int i=0; i<scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
             if (!mesh->HasNormals()) {
-                printf("Malformed (no normals) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no normals) mesh in %s\n", pathString.c_str());
                 abort();
             }
             if (!mesh->HasPositions()) {
-                printf("Malformed (no positions) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no positions) mesh in %s\n", pathString.c_str());
                 abort();
             }
             if (!mesh->HasTextureCoords(0)) {
-                printf("Malformed (no texcoords) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no texcoords) mesh in %s\n", pathString.c_str());
                 abort();
             }
             MeshPtr meshp = make_shared<Mesh>();
@@ -633,15 +634,13 @@ public:
             Meshes.push_back(meshp);
 
             aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
-            aiString diffuseMapPath;
+            aiString diffuseMapPath, specularMapPath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
-            TexturePtr diffuseMap;
-            if (diffuseMapPath != aiString("")) {
-                diffuseMap = make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str()));
-            } else {
-                diffuseMap = make_shared<Texture>(IO->FindDataFile("white.png"));
-            }
-            DiffuseTextures.push_back(diffuseMap);
+            material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
+            diffuseMapPath = (diffuseMapPath.length==0)?aiString("white.png"):diffuseMapPath;
+            specularMapPath = (specularMapPath.length==0)?aiString("black.png"):specularMapPath;
+            DiffuseTextures.push_back(make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str())));
+            SpecularTextures.push_back(make_shared<Texture>(IO->FindDataFile(specularMapPath.C_Str())));
         }        
     }
 };
@@ -722,12 +721,14 @@ public:
 
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
+        BasicShader->SetUniform("SpecularTexture", 1);  
         for (int i=0; i<Lights.size(); ++i) {
             BasicShader->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
             BasicShader->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
         }
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
             Sponza->DiffuseTextures[i]->Bind(0);
+            Sponza->SpecularTextures[i]->Bind(1);
             Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
         }     
