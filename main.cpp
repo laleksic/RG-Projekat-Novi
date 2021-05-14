@@ -274,6 +274,8 @@ class Mesh {
     GLuint ColorBuffer;
     GLuint TexCoordBuffer;
     GLuint NormalBuffer;
+    GLuint TangentBuffer;
+    GLuint BitangentBuffer;
     
     GLuint ElementBuffer;
     GLsizei ElementCount;
@@ -283,6 +285,8 @@ public:
     vector<vec3> Colors;
     vector<vec2> TexCoords;
     vector<vec3> Normals;
+    vector<vec3> Tangents;
+    vector<vec3> Bitangents;
     vector<GLuint> Elements;
 
     Mesh() {
@@ -294,22 +298,32 @@ public:
         glCreateBuffers(1, &ColorBuffer);
         glCreateBuffers(1, &TexCoordBuffer);
         glCreateBuffers(1, &NormalBuffer);
+        glCreateBuffers(1, &TangentBuffer);
+        glCreateBuffers(1, &BitangentBuffer);
         glVertexArrayAttribFormat(VertexArray, 0, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribFormat(VertexArray, 1, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribFormat(VertexArray, 2, 2, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribFormat(VertexArray, 3, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribFormat(VertexArray, 4, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribFormat(VertexArray, 5, 3, GL_FLOAT, GL_FALSE, 0);
         glVertexArrayAttribBinding(VertexArray, 0, 0);
         glVertexArrayAttribBinding(VertexArray, 1, 1);
         glVertexArrayAttribBinding(VertexArray, 2, 2);
         glVertexArrayAttribBinding(VertexArray, 3, 3);
+        glVertexArrayAttribBinding(VertexArray, 4, 3);
+        glVertexArrayAttribBinding(VertexArray, 5, 3);
         glEnableVertexArrayAttrib(VertexArray, 0);
         glEnableVertexArrayAttrib(VertexArray, 1);
         glEnableVertexArrayAttrib(VertexArray, 2);
         glEnableVertexArrayAttrib(VertexArray, 3);
+        glEnableVertexArrayAttrib(VertexArray, 4);
+        glEnableVertexArrayAttrib(VertexArray, 5);
         glVertexArrayVertexBuffer(VertexArray, 0, PositionBuffer, 0, sizeof(Positions[0]));
         glVertexArrayVertexBuffer(VertexArray, 1, ColorBuffer, 0, sizeof(Colors[0])); 
         glVertexArrayVertexBuffer(VertexArray, 2, TexCoordBuffer, 0, sizeof(TexCoords[0])); 
         glVertexArrayVertexBuffer(VertexArray, 3, NormalBuffer, 0, sizeof(Normals[0])); 
+        glVertexArrayVertexBuffer(VertexArray, 4, TangentBuffer, 0, sizeof(Tangents[0])); 
+        glVertexArrayVertexBuffer(VertexArray, 5, BitangentBuffer, 0, sizeof(Bitangents[0])); 
 
         glVertexArrayElementBuffer(VertexArray, ElementBuffer);    
     }   
@@ -319,6 +333,8 @@ public:
         glDeleteBuffers(1, &ColorBuffer);
         glDeleteBuffers(1, &TexCoordBuffer);
         glDeleteBuffers(1, &NormalBuffer);
+        glDeleteBuffers(1, &TangentBuffer);
+        glDeleteBuffers(1, &BitangentBuffer);
     } 
     void UploadToGPU() {
         ElementCount = Elements.size();
@@ -329,6 +345,8 @@ public:
         assert(Colors.size() == VERTEX_COUNT);
         assert(TexCoords.size() == VERTEX_COUNT);
         assert(Normals.size() == VERTEX_COUNT);
+        assert(Tangents.size() == VERTEX_COUNT);
+        assert(Bitangents.size() == VERTEX_COUNT);
         assert(Elements.size() % 3 == 0);
         for (GLuint element: Elements) {
             assert(element < VERTEX_COUNT);
@@ -340,6 +358,8 @@ public:
         glNamedBufferData(ColorBuffer, VERTEX_COUNT * sizeof(Colors[0]), Colors.data(), GL_STATIC_DRAW);
         glNamedBufferData(TexCoordBuffer, VERTEX_COUNT * sizeof(TexCoords[0]), TexCoords.data(), GL_STATIC_DRAW);
         glNamedBufferData(NormalBuffer, VERTEX_COUNT * sizeof(Normals[0]), Normals.data(), GL_STATIC_DRAW);
+        glNamedBufferData(TangentBuffer, VERTEX_COUNT * sizeof(Tangents[0]), Tangents.data(), GL_STATIC_DRAW);
+        glNamedBufferData(BitangentBuffer, VERTEX_COUNT * sizeof(Bitangents[0]), Bitangents.data(), GL_STATIC_DRAW);
         
         glNamedBufferData(ElementBuffer, ElementCount * sizeof(GLuint), Elements.data(), GL_STATIC_DRAW);
     }
@@ -577,6 +597,7 @@ public:
     vector<MeshPtr> Meshes;
     vector<TexturePtr> DiffuseTextures;
     vector<TexturePtr> SpecularTextures;
+    vector<TexturePtr> NormalTextures;
 
     Model(fs::path path, IOUtilsPtr IO) {
         Assimp::Importer importer;
@@ -587,6 +608,7 @@ public:
         flags |= aiProcess_Triangulate;
         flags |= aiProcess_PreTransformVertices;
         flags |= aiProcess_FlipUVs;
+        flags |= aiProcess_CalcTangentSpace;
         //flags |= aiProcess_GenNormals;
         // flags |= aiProcess_ForceGenNormals;
         // flags |= aiProcess_FixInfacingNormals;
@@ -612,11 +634,17 @@ public:
                 fprintf(stderr, "Malformed (no texcoords) mesh in %s\n", pathString.c_str());
                 abort();
             }
+            if (!mesh->HasTangentsAndBitangents()) {
+                fprintf(stderr, "Malformed (no tangents & bitangents) mesh in %s\n", pathString.c_str());
+                abort();
+            }
             MeshPtr meshp = make_shared<Mesh>();
             meshp->Positions.resize(mesh->mNumVertices);
             meshp->Colors.resize(mesh->mNumVertices);
             meshp->TexCoords.resize(mesh->mNumVertices);
             meshp->Normals.resize(mesh->mNumVertices);
+            meshp->Tangents.resize(mesh->mNumVertices);
+            meshp->Bitangents.resize(mesh->mNumVertices);
 
             meshp->Elements.reserve(mesh->mNumFaces * 3);
             for (int j=0; j<mesh->mNumVertices; ++j) {
@@ -624,6 +652,8 @@ public:
                 meshp->Colors[j] = vec3(1,1,1);
                 meshp->TexCoords[j] = vec2(mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y);
                 meshp->Normals[j] = vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
+                meshp->Tangents[j] = vec3(mesh->mTangents[j].x, mesh->mTangents[j].y, mesh->mTangents[j].z);
+                meshp->Bitangents[j] = vec3(mesh->mBitangents[j].x, mesh->mBitangents[j].y, mesh->mBitangents[j].z);
             }
             for (int j=0; j<mesh->mNumFaces; ++j) {
                 meshp->Elements.push_back(mesh->mFaces[j].mIndices[0]);
@@ -634,13 +664,16 @@ public:
             Meshes.push_back(meshp);
 
             aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
-            aiString diffuseMapPath, specularMapPath;
+            aiString diffuseMapPath, specularMapPath, normalMapPath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
             material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
+            material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
             diffuseMapPath = (diffuseMapPath.length==0)?aiString("white.png"):diffuseMapPath;
             specularMapPath = (specularMapPath.length==0)?aiString("black.png"):specularMapPath;
+            normalMapPath = (normalMapPath.length==0)?aiString("blankNormal.png"):normalMapPath;
             DiffuseTextures.push_back(make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str())));
             SpecularTextures.push_back(make_shared<Texture>(IO->FindDataFile(specularMapPath.C_Str())));
+            NormalTextures.push_back(make_shared<Texture>(IO->FindDataFile(normalMapPath.C_Str())));
         }        
     }
 };
@@ -722,6 +755,7 @@ public:
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
         BasicShader->SetUniform("SpecularTexture", 1);  
+        BasicShader->SetUniform("NormalTexture", 2);  
         for (int i=0; i<Lights.size(); ++i) {
             BasicShader->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
             BasicShader->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
@@ -729,6 +763,7 @@ public:
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
             Sponza->DiffuseTextures[i]->Bind(0);
             Sponza->SpecularTextures[i]->Bind(1);
+            Sponza->NormalTextures[i]->Bind(2);
             Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
         }     
