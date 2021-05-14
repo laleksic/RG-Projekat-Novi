@@ -10,6 +10,9 @@ uniform sampler2D SpecularTexture;
 uniform sampler2D NormalTexture;
 uniform Light Lights[32];
 uniform vec3 CameraPosition;
+uniform bool UseNormalMaps;
+uniform bool VisualizeNormals;
+uniform bool UseSpecular;
 
 #if defined(VERTEX_SHADER)
 out
@@ -65,10 +68,17 @@ VertexData {
             discard;
         }
 
-        vec3 normal = normalSample.xyz;
-        normal = 2*normal - vec3(1);
-        normal = vertexData.TangentBitangentNormalMatrix * normal;
-        normal = normalize(normal);
+        vec3 normal;
+        if (UseNormalMaps) {
+            //Trouble is somewhere here?
+            normal = normalSample.rgb;
+            normal = 2*normal - vec3(1);
+            normal = normalize(normal);
+            normal = vertexData.TangentBitangentNormalMatrix * normal;
+            normal = normalize(normal);
+        } else {
+            normal = vertexData.WorldSpaceNormal;
+        }
 
         vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
         
@@ -85,11 +95,13 @@ VertexData {
 
             // diffuseStrength = 0;
             color += attenuation * diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample;
-            color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
+            if (UseSpecular)
+                color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
         }
         Color = color;
         
-        //Color = vec4(abs(normal), 1);
+        if (VisualizeNormals)
+            Color = vec4(abs(normal), 1);
         //Color = normalSample;
     }
 #endif

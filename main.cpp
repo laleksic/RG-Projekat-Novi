@@ -444,7 +444,13 @@ public:
             glGetUniformLocation(Program, name.c_str()),
             value
         );
-    }    
+    }
+    void SetUniform(string name, bool value) {
+        glProgramUniform1i(Program, 
+            glGetUniformLocation(Program, name.c_str()),
+            value?GL_TRUE:GL_FALSE
+        );
+    }         
     void SetUniform(string name, vec3 value) {
         glProgramUniform3fv(Program,
             glGetUniformLocation(Program, name.c_str()),
@@ -703,6 +709,10 @@ class Main: public Engine {
     IOUtilsPtr IO;
     RandomNumberGenerator RNG;
     vector<Light> Lights;
+
+    bool UseNormalMaps = false;
+    bool VisualizeNormals = false;
+    bool UseSpecular = true;
     
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -758,6 +768,13 @@ public:
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
+
+        ImGui::Checkbox("Use Normal Maps", &UseNormalMaps);
+        ImGui::Checkbox("Visualize Normals", &VisualizeNormals);       
+        ImGui::Checkbox("Use Specular", &UseSpecular);       
+        BasicShader->SetUniform("UseNormalMaps", UseNormalMaps);
+        BasicShader->SetUniform("VisualizeNormals", VisualizeNormals);
+        BasicShader->SetUniform("UseSpecular", UseSpecular);
 
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
