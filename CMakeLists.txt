@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.0)
+cmake_minimum_required(VERSION 3.16.0)
 project(RG-Projekat)
 
 include_directories(glad/include)
@@ -15,6 +15,7 @@ add_executable(RG-Projekat
         imgui-1.82/backends/imgui_impl_opengl3.cpp
         )
 set_property(TARGET RG-Projekat PROPERTY CXX_STANDARD 17)
+#target_precompile_headers(RG-Projekat PRIVATE main.hpp)
 find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(assimp REQUIRED)
