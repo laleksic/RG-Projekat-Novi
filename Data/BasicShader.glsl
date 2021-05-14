@@ -13,6 +13,8 @@ uniform vec3 CameraPosition;
 uniform bool UseNormalMaps;
 uniform bool VisualizeNormals;
 uniform bool UseSpecular;
+uniform bool HighlightZeroNormals;
+uniform bool NormalizeAfterConvertingToWorldSpace;
 
 #if defined(VERTEX_SHADER)
 out
@@ -41,13 +43,16 @@ VertexData {
         gl_Position = ModelViewProjection * gl_Position;
         vertexData.Color = Color;
         vertexData.TexCoords = TexCoords;
-        vertexData.WorldSpacePosition = vec3(Model * vec4(Position, 1));
-        vertexData.WorldSpaceNormal = normalize(vec3(Model * vec4(Normal, 0)));
-        vertexData.TangentBitangentNormalMatrix = mat3(
-            normalize(vec3(Model * vec4(Tangent, 0))),
-            normalize(vec3(Model * vec4(Bitangent, 0))),
-            normalize(vec3(Model * vec4(Normal, 0)))
-        );
+        vertexData.WorldSpacePosition = (Model * vec4(Position, 1)).xyz;
+
+        // Normal matrix! learnopengl.com/Lighting/Basic-lighting
+        mat3 normalMatrix = mat3(transpose(inverse(Model)));
+        
+        vec3 worldSpaceNormal = normalize(normalMatrix * normalize(Normal));
+        vec3 worldSpaceTangent = normalize(normalMatrix * normalize(Tangent));
+        vec3 worldSpaceBitangent = normalize(normalMatrix * normalize(Bitangent));
+        vertexData.WorldSpaceNormal = worldSpaceNormal;
+        vertexData.TangentBitangentNormalMatrix = mat3(worldSpaceTangent, worldSpaceBitangent, worldSpaceNormal);
     }
 #elif defined(FRAGMENT_SHADER)
     out vec4 Color;
@@ -74,11 +79,14 @@ VertexData {
             normal = normalSample.rgb;
             normal = 2*normal - vec3(1);
             normal = normalize(normal);
+
             normal = vertexData.TangentBitangentNormalMatrix * normal;
-            normal = normalize(normal);
+            if (NormalizeAfterConvertingToWorldSpace)          
+                normal = normalize(normal);
         } else {
-            normal = vertexData.WorldSpaceNormal;
+            normal = normalize(vertexData.WorldSpaceNormal);
         }
+
 
         vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
         
@@ -89,9 +97,9 @@ VertexData {
             float attenuation = AttenuateLight(distanceToLight);
             float diffuseStrength = lambertFactor;
 
-            vec3 halfway = (normalize(toCamera)+normalize(toLight))*0.5;
+            vec3 halfway = normalize(normalize(toCamera)+normalize(toLight));
             float specularStrength = max(0,dot(halfway,normal));
-            specularStrength = 0.1f * pow(specularStrength, 32);
+            specularStrength = pow(specularStrength, 48);
 
             // diffuseStrength = 0;
             color += attenuation * diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample;
@@ -101,7 +109,10 @@ VertexData {
         Color = color;
         
         if (VisualizeNormals)
-            Color = vec4(abs(normal), 1);
+            Color = vec4((normal+vec3(1))/2, 1);
+
+        if (length(normal) < 0.1 && HighlightZeroNormals)
+            Color = vec4(1,0,0,1);
         //Color = normalSample;
     }
 #endif

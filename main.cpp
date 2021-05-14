@@ -317,8 +317,9 @@ public:
         glVertexArrayAttribBinding(VertexArray, 1, 1);
         glVertexArrayAttribBinding(VertexArray, 2, 2);
         glVertexArrayAttribBinding(VertexArray, 3, 3);
-        glVertexArrayAttribBinding(VertexArray, 4, 3);
-        glVertexArrayAttribBinding(VertexArray, 5, 3);
+        // Koja sam ja budala...
+        glVertexArrayAttribBinding(VertexArray, 4, 4);
+        glVertexArrayAttribBinding(VertexArray, 5, 5);
         glEnableVertexArrayAttrib(VertexArray, 0);
         glEnableVertexArrayAttrib(VertexArray, 1);
         glEnableVertexArrayAttrib(VertexArray, 2);
@@ -624,11 +625,11 @@ public:
         flags |= aiProcess_CalcTangentSpace;
         //flags |= aiProcess_GenNormals;
         // flags |= aiProcess_ForceGenNormals;
-        // flags |= aiProcess_FixInfacingNormals;
-        // flags |= aiProcess_FindInvalidData;
+        flags |= aiProcess_FixInfacingNormals;
+        flags |= aiProcess_FindInvalidData;
         // flags |= aiProcess_GenUVCoords;
         const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
-        // scene = importer.ApplyPostProcessing(aiProcess_GenNormals);
+        scene = importer.ApplyPostProcessing(aiProcess_GenNormals);
         if (!scene) {
             fprintf(stderr, "Couldn't load %s!\n", pathString.c_str());
             abort();
@@ -713,6 +714,8 @@ class Main: public Engine {
     bool UseNormalMaps = false;
     bool VisualizeNormals = false;
     bool UseSpecular = true;
+    bool HighlightZeroNormals = true;
+    bool NormalizeAfterConvertingToWorldSpace = true;
     
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -772,9 +775,13 @@ public:
         ImGui::Checkbox("Use Normal Maps", &UseNormalMaps);
         ImGui::Checkbox("Visualize Normals", &VisualizeNormals);       
         ImGui::Checkbox("Use Specular", &UseSpecular);       
+        ImGui::Checkbox("Highlight Zero Normals", &HighlightZeroNormals);       
+        ImGui::Checkbox("Normalize After Converting To World Space", &NormalizeAfterConvertingToWorldSpace);       
         BasicShader->SetUniform("UseNormalMaps", UseNormalMaps);
         BasicShader->SetUniform("VisualizeNormals", VisualizeNormals);
         BasicShader->SetUniform("UseSpecular", UseSpecular);
+        BasicShader->SetUniform("HighlightZeroNormals", HighlightZeroNormals);
+        BasicShader->SetUniform("NormalizeAfterConvertingToWorldSpace", NormalizeAfterConvertingToWorldSpace);
 
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
