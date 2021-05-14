@@ -603,6 +603,25 @@ public:
     }
 };
 
+class TextureLoader {
+    map<fs::path, TexturePtr> LoadedTextures;
+    IOUtilsPtr IO;
+public:
+    TextureLoader(IOUtilsPtr io): IO(io){}
+    TexturePtr Load(fs::path path) {
+        path = path.filename();
+        auto it = LoadedTextures.find(path);
+        if (it == LoadedTextures.end()) {
+            fs::path found = IO->FindDataFile(path.string());
+            TexturePtr texture = make_shared<Texture>(found);
+            LoadedTextures[path] = texture;
+            return texture;
+        }
+        return it->second;
+    }
+};
+
+typedef shared_ptr<TextureLoader> TextureLoaderPtr;
 typedef shared_ptr<Mesh> MeshPtr;
 typedef shared_ptr<Shader> ShaderPtr;
 
@@ -613,7 +632,7 @@ public:
     vector<TexturePtr> SpecularTextures;
     vector<TexturePtr> NormalTextures;
 
-    Model(fs::path path, IOUtilsPtr IO) {
+    Model(fs::path path, TextureLoaderPtr textureLoader) {
         Assimp::Importer importer;
         //AssimpReadOnlyIOSystem ioHandler(IO);
         //importer.SetIOHandler(&ioHandler);
@@ -685,9 +704,9 @@ public:
             diffuseMapPath = (diffuseMapPath.length==0)?aiString("white.png"):diffuseMapPath;
             specularMapPath = (specularMapPath.length==0)?aiString("black.png"):specularMapPath;
             normalMapPath = (normalMapPath.length==0)?aiString("blankNormal.png"):normalMapPath;
-            DiffuseTextures.push_back(make_shared<Texture>(IO->FindDataFile(diffuseMapPath.C_Str())));
-            SpecularTextures.push_back(make_shared<Texture>(IO->FindDataFile(specularMapPath.C_Str())));
-            NormalTextures.push_back(make_shared<Texture>(IO->FindDataFile(normalMapPath.C_Str())));
+            DiffuseTextures.push_back(textureLoader->Load(diffuseMapPath.C_Str()));
+            SpecularTextures.push_back(textureLoader->Load(specularMapPath.C_Str()));
+            NormalTextures.push_back(textureLoader->Load(normalMapPath.C_Str()));
         }        
     }
 };
@@ -708,6 +727,7 @@ class Main: public Engine {
     int Argc;
     char **Argv;
     IOUtilsPtr IO;
+    TextureLoaderPtr TexLoader;
     RandomNumberGenerator RNG;
     vector<Light> Lights;
 
@@ -731,8 +751,9 @@ class Main: public Engine {
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         IO = make_shared<IOUtils>(GetExecutablePath());
+        TexLoader = make_shared<TextureLoader>(IO);
         // Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
-        Sponza = make_shared<Model>(IO->FindDataFile("sponza.obj"), IO);
+        Sponza = make_shared<Model>(IO->FindDataFile("sponza.obj"), TexLoader);
         BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("BasicShader.glsl"));
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  

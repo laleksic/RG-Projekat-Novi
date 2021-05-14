@@ -20,6 +20,7 @@
 #include <string>
 #include <memory>
 #include <filesystem>
+#include <map>
 using namespace glm;
 using namespace std;
 namespace fs = filesystem;
