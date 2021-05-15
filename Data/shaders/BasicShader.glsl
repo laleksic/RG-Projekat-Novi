@@ -3,8 +3,8 @@ struct Light {
     vec3 Color;
 };
 
-uniform mat4 ModelViewProjection;
-uniform mat4 Model;
+uniform mat4 MVPMat;
+uniform mat4 ModelMat;
 uniform sampler2D DiffuseTexture;
 uniform sampler2D SpecularTexture;
 uniform sampler2D NormalTexture;
@@ -30,9 +30,11 @@ in
 VertexData {
     vec3 Color;
     vec2 TexCoords;
-    vec3 WorldSpacePosition;
-    vec3 WorldSpaceNormal;
-    mat3 TangentBitangentNormalMatrix;
+    vec3 WSPosition;
+    //mat3 TBNMat;
+    //vec3 TSToLight[32];
+    mat3 InvTBNMat;
+    vec3 TSToCamera;
 } vertexData;
 
 #if defined(VERTEX_SHADER)
@@ -46,19 +48,25 @@ VertexData {
     void main() {
         gl_Position.xyz = Position;
         gl_Position.w = 1.0f;
-        gl_Position = ModelViewProjection * gl_Position;
+        gl_Position = MVPMat * gl_Position;
         vertexData.Color = Color;
         vertexData.TexCoords = TexCoords;
-        vertexData.WorldSpacePosition = (Model * vec4(Position, 1)).xyz;
+        vertexData.WSPosition = (ModelMat * vec4(Position, 1)).xyz;
 
         // Normal matrix! learnopengl.com/Lighting/Basic-lighting
-        mat3 normalMatrix = mat3(transpose(inverse(Model)));
+        mat3 normalMatrix = mat3(transpose(inverse(ModelMat)));
         
-        vec3 worldSpaceNormal = normalize(normalMatrix * normalize(Normal));
-        vec3 worldSpaceTangent = normalize(normalMatrix * normalize(Tangent));
-        vec3 worldSpaceBitangent = normalize(normalMatrix * normalize(Bitangent));
-        vertexData.WorldSpaceNormal = worldSpaceNormal;
-        vertexData.TangentBitangentNormalMatrix = mat3(worldSpaceTangent, worldSpaceBitangent, worldSpaceNormal);
+        vec3 wsNormal = normalize(normalMatrix * normalize(Normal));
+        vec3 wsTangent = normalize(normalMatrix * normalize(Tangent));
+        vec3 wsBitangent = normalize(normalMatrix * normalize(Bitangent));
+        mat3 invTBNMat = transpose(mat3(wsTangent, wsBitangent, wsNormal));
+
+        vertexData.TSToCamera = invTBNMat * (CameraPosition - vertexData.WSPosition);
+        // for (int i=0; i<32; ++i) {
+            // vertexData.TSToLight[i] = invTBNMat * (Lights[i].Position - vertexData.WSPosition);
+        // }
+        vertexData.InvTBNMat = invTBNMat;
+
     }
 #elif defined(FRAGMENT_SHADER)
     out vec4 Color;
@@ -72,18 +80,15 @@ VertexData {
 
     void main() {
         vec4 color = vec4(0,0,0,1);
+
         vec4 bumpSample = texture(BumpTexture, vertexData.TexCoords);
         float depth = bumpSample.r;
-        vec3 tangentSpaceCameraPosition = vertexData.TangentBitangentNormalMatrix * CameraPosition;
-        vec3 tangentSpacePosition = vertexData.TangentBitangentNormalMatrix * vertexData.WorldSpacePosition;
-        vec3 tangentSpaceToCamera = normalize(tangentSpaceCameraPosition - tangentSpacePosition);
-        vec2 texCoordsOffset = (tangentSpaceToCamera * depth).xy;
+        vec3 tsToCamera = normalize(vertexData.TSToCamera);
+        tsToCamera.y *= -1; // Ovo popravlja stvari, iz nekog razloga...
+        vec2 texCoordsOffset = (tsToCamera * depth).xy;
+        tsToCamera.y *= -1;
         vec2 texCoords = vertexData.TexCoords + ParallaxStrength * texCoordsOffset;
       
-        // vec3 position = vertexData.WorldSpacePosition + normalize(toCamera) * depth;
-        vec3 position = vertexData.WorldSpacePosition;
-        vec3 toCamera = CameraPosition - position;
-
         vec4 diffuseSample = texture(DiffuseTexture, texCoords);
         vec4 specularSample = texture(SpecularTexture, texCoords);
         vec4 normalSample = texture(NormalTexture, texCoords);
@@ -91,36 +96,33 @@ VertexData {
             discard;
         }
 
-        vec3 normal;
+        vec3 tsNormal;
         if (UseNormalMaps) {
-            //Trouble is somewhere here?
-            normal = normalSample.rgb;
-            normal = 2*normal - vec3(1);
-            normal = normalize(normal);
-
-            normal = vertexData.TangentBitangentNormalMatrix * normal;
-            if (NormalizeAfterConvertingToWorldSpace)          
-                normal = normalize(normal);
+            tsNormal = normalSample.rgb;
+            tsNormal = 2*tsNormal - vec3(1);
+            tsNormal = normalize(tsNormal);
         } else {
-            normal = normalize(vertexData.WorldSpaceNormal);
+            tsNormal = vec3(0,0,1);
         }
 
-        
-
-        
+        mat3 invTBNMat = vertexData.InvTBNMat;
         for (int i=0; i<32; ++i) {
-            vec3 toLight = Lights[i].Position - position;
-            float distanceToLight = length(toLight);
-            float lambertFactor = max(0,dot(normalize(toLight), normal));
+            vec3 wsPosition = vertexData.WSPosition;
+            vec3 wsLightPosition = Lights[i].Position;
+            vec3 tsToLight = invTBNMat * (wsLightPosition - wsPosition);
+
+            float distanceToLight = length(tsToLight);
+            tsToLight = normalize(tsToLight);
+            float lambertFactor = max(0,dot(tsToLight, tsNormal));
             if (Translucent) {
-                float lambertFactorBack = max(0,dot(normalize(toLight), -normal));
+                float lambertFactorBack = max(0,dot(tsToLight, -tsNormal));
                 lambertFactor = max(lambertFactor, lambertFactorBack);
             }
             float attenuation = AttenuateLight(distanceToLight);
             float diffuseStrength = lambertFactor;
 
-            vec3 halfway = normalize(normalize(toCamera)+normalize(toLight));
-            float specularStrength = max(0,dot(halfway,normal));
+            vec3 halfway = normalize(tsToCamera+tsToLight);
+            float specularStrength = max(0,dot(halfway,tsNormal));
             specularStrength = pow(specularStrength, 48);
 
             // diffuseStrength = 0;
@@ -130,17 +132,5 @@ VertexData {
         }
         color += vec4(AmbientLight,1) * diffuseSample;
         Color = color;
-        
-        if (VisualizeNormals)
-            Color = vec4((normal+vec3(1))/2, 1);
-        else if (VisualizeBumpMap)
-            Color = bumpSample;
-        else if (NoLighting)
-            Color = diffuseSample;
-
-        if (length(normal) < 0.1 && HighlightZeroNormals)
-            Color = vec4(1,0,0,1);
-
-        //Color = normalSample;
     }
 #endif

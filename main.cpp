@@ -659,14 +659,14 @@ public:
         flags |= aiProcess_Triangulate;
         flags |= aiProcess_PreTransformVertices;
         flags |= aiProcess_FlipUVs;
-        flags |= aiProcess_CalcTangentSpace;
+        // flags |= aiProcess_CalcTangentSpace;
         //flags |= aiProcess_GenNormals;
         // flags |= aiProcess_ForceGenNormals;
         flags |= aiProcess_FixInfacingNormals;
         flags |= aiProcess_FindInvalidData;
         // flags |= aiProcess_GenUVCoords;
         const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
-        scene = importer.ApplyPostProcessing(aiProcess_GenNormals);
+        scene = importer.ApplyPostProcessing(aiProcess_GenNormals | aiProcess_CalcTangentSpace);
         if (!scene) {
             fprintf(stderr, "Couldn't load %s!\n", pathString.c_str());
             abort();
@@ -813,8 +813,8 @@ public:
         mat4 modelMatrix = scale(vec3(0.01f));
         mat4 viewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
         mat4 modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
-        BasicShader->SetUniform("ModelViewProjection", modelViewProjectionMatrix);
-        BasicShader->SetUniform("Model", modelMatrix);
+        BasicShader->SetUniform("MVPMat", modelViewProjectionMatrix);
+        BasicShader->SetUniform("ModelMat", modelMatrix);
         BasicShader->SetUniform("CameraPosition", Camera.GetPosition());
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
@@ -872,8 +872,8 @@ public:
 
         modelMatrix = scale(vec3(1.0f));
         modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
-        BasicShader->SetUniform("ModelViewProjection", modelViewProjectionMatrix);
-        BasicShader->SetUniform("Model", modelMatrix);
+        BasicShader->SetUniform("MVPMat", modelViewProjectionMatrix);
+        BasicShader->SetUniform("ModelMat", modelMatrix);
         for (int i=0; i<Cube->Meshes.size(); ++i) {
             Cube->DiffuseTextures[i]->Bind(0);
             Cube->SpecularTextures[i]->Bind(1);
