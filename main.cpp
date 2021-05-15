@@ -10,7 +10,7 @@ class Camera {
 public:
     void SetPitch(float pitch) {
         Pitch = pitch;
-        const float EPSILON = 0.01f;
+        const float EPSILON = 0.1f;
         if (Pitch > (90 - EPSILON))
             Pitch = 90 - EPSILON;
         if (Pitch < -(90 - EPSILON))
@@ -160,6 +160,8 @@ public:
         wishDirection += (Input->IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
         wishDirection += (Input->IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
         wishDirection += (Input->IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
+        if (length(wishDirection) > 0.001f)
+            wishDirection = normalize(wishDirection);
         SetPosition(GetPosition() + wishDirection * MOVEMENT_SPEED);
     }
 };
