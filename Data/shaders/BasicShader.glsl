@@ -78,17 +78,54 @@ VertexData {
         return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
     }
 
+    void ReliefParallaxMapping(
+        vec3 tsToCamera,
+        inout vec2 st
+    ) {
+        // Steep parallax mapping
+        const int LAYER_COUNT = 32;
+        float depthStep = ParallaxDepth / LAYER_COUNT;
+        vec2 stStep = -(tsToCamera.xy * ParallaxDepth) / LAYER_COUNT;
+
+        float currLayerDepth = 0;
+        while (currLayerDepth < ParallaxDepth) {
+            // check if under surface
+            if (currLayerDepth > texture(BumpTexture, st).r)
+                break;
+
+            currLayerDepth += depthStep;
+            st += stStep;
+        }
+
+        // Relief parallax mapping
+        const int RELIEF_STEPS = 8;
+        for (int i=0; i<RELIEF_STEPS; ++i) {
+            depthStep /= 2;
+            stStep /= 2;
+            // check if under surface
+            if (currLayerDepth > texture(BumpTexture, st).r) {
+                currLayerDepth-=depthStep;
+                st-=stStep;
+            } else {
+                currLayerDepth+=depthStep;
+                st+=stStep;
+            }
+        }
+    }
+
     void main() {
         vec4 color = vec4(0,0,0,1);
 
         vec4 bumpSample = texture(BumpTexture, vertexData.TexCoords);
         float depth = bumpSample.r;
         vec3 tsToCamera = normalize(vertexData.TSToCamera);
-        tsToCamera.y *= -1; // Ovo popravlja stvari, iz nekog razloga...
-        vec2 texCoordsOffset = (tsToCamera * depth).xy;
+        
+        tsToCamera.y *= -1; // This fixes things for a reason
+        vec2 texCoords = vertexData.TexCoords;
+        ReliefParallaxMapping(tsToCamera, texCoords);
+        // When we're done with parallax mapping
         tsToCamera.y *= -1;
-        vec2 texCoords = vertexData.TexCoords - ParallaxDepth * texCoordsOffset;
-      
+
         vec4 diffuseSample = texture(DiffuseTexture, texCoords);
         vec4 specularSample = texture(SpecularTexture, texCoords);
         vec4 normalSample = texture(NormalTexture, texCoords);
