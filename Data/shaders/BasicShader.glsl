@@ -24,8 +24,6 @@ VertexData {
     vec3 Color;
     vec2 TexCoords;
     vec3 WSPosition;
-    //mat3 TBNMat;
-    //vec3 TSToLight[32];
     mat3 InvTBNMat;
     vec3 TSToCamera;
 } vertexData;
@@ -55,9 +53,6 @@ VertexData {
         mat3 invTBNMat = transpose(mat3(wsTangent, wsBitangent, wsNormal));
 
         vertexData.TSToCamera = invTBNMat * (CameraPosition - vertexData.WSPosition);
-        // for (int i=0; i<32; ++i) {
-            // vertexData.TSToLight[i] = invTBNMat * (Lights[i].Position - vertexData.WSPosition);
-        // }
         vertexData.InvTBNMat = invTBNMat;
 
     }
@@ -152,12 +147,7 @@ VertexData {
         vec4 color = vec4(0,0,0,1);
         vec3 tsToCamera = normalize(vertexData.TSToCamera);
         vec2 texCoords = vertexData.TexCoords;
-        // texCoords = fract(texCoords);
         ReliefParallaxMapping(tsToCamera, texCoords);
-        // if (texCoords.s < 0 || texCoords.s > 1 ||
-        //     texCoords.t < 0 || texCoords.t > 1 ) {
-        //     discard;
-        // }
 
         vec4 diffuseSample = texture(DiffuseTexture, texCoords);
         vec4 specularSample = texture(SpecularTexture, texCoords);
@@ -191,7 +181,6 @@ VertexData {
             float specularStrength = max(0,dot(halfway,tsNormal));
             specularStrength = pow(specularStrength, 48);
 
-            // diffuseStrength = 0;
             color += attenuation * diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample;
             color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
             
