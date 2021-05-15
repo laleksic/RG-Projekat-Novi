@@ -169,6 +169,21 @@ class Engine {
     GLFWwindow *Window;
     ImGuiContext *Gui;
 
+    void Begin() {
+        Input->NewFrame();  
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();            
+        ImGui::Begin("RG-Projekat");
+    }
+    void End() {
+        ImGui::End();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(Window);
+    }
 public:
     InputMasterPtr Input;
     Engine() {
@@ -215,26 +230,9 @@ public:
     }
     void Run() {
         while (!glfwWindowShouldClose(Window)) {
-            Input->NewFrame();  
-
-            // https://blog.conan.io/2019/06/26/An-introduction-to-the-Dear-ImGui-library.html
-            // feed inputs to dear imgui, start new frame
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();            
-
-            // render your GUI
-            ImGui::Begin("RG-Projekat");
-
+            Begin();
             OnFrame(); 
-            
-            ImGui::End();
-
-            // Render dear imgui into screen
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-            glfwSwapBuffers(Window);
+            End();
         }
     }
 
@@ -705,7 +703,7 @@ public:
 };
 
 int main(int argc, char** argv) {
-    Main app(argc, argv);
+    Main app;
     app.Run();
     return 0;
 }
