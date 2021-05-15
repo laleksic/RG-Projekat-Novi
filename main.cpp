@@ -569,7 +569,7 @@ float lightLerp = 0.0f;
 
 float ParallaxDepth = 0.04f;
 
-void CalculateViewport() {
+void CalculateViewportAndProjectionMatrix() {
     ivec2 windowSize = TheEngine->GetWindowSize();
     float aspectRatio = (float)windowSize.x / windowSize.y;
     ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
@@ -586,7 +586,7 @@ int main(int argc, char** argv) {
     LightCubeShader = LoadShader("Data/shaders/LightCube.glsl");
 
     Camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
-    CalculateViewport();
+    CalculateViewportAndProjectionMatrix();
 
     const int LIGHT_COUNT = 32;
     for (int j=0; j<2; ++j) {
@@ -608,7 +608,7 @@ int main(int argc, char** argv) {
 
     while (TheEngine->Run()) {
         if (TheEngine->WasWindowResized()) {
-            CalculateViewport();
+            CalculateViewportAndProjectionMatrix();
         }
 
         Camera.Update();
