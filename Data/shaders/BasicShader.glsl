@@ -144,13 +144,14 @@ VertexData {
 
     void main() {
         vec4 color = vec4(0,0,0,1);
-
-        vec4 bumpSample = texture(BumpTexture, vertexData.TexCoords);
-        float depth = bumpSample.r;
         vec3 tsToCamera = normalize(vertexData.TSToCamera);
-        
         vec2 texCoords = vertexData.TexCoords;
+        // texCoords = fract(texCoords);
         ReliefParallaxMapping(tsToCamera, texCoords);
+        // if (texCoords.s < 0 || texCoords.s > 1 ||
+        //     texCoords.t < 0 || texCoords.t > 1 ) {
+        //     discard;
+        // }
 
         vec4 diffuseSample = texture(DiffuseTexture, texCoords);
         vec4 specularSample = texture(SpecularTexture, texCoords);

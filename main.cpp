@@ -760,7 +760,7 @@ class Main: public Engine {
     bool NormalizeAfterConvertingToWorldSpace = true;
     bool VisualizeBumpMap = false;
     bool NoLighting = false;
-    float ParallaxDepth = 0.09f;
+    float ParallaxDepth = 0.05f;
 
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
