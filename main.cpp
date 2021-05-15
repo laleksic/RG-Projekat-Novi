@@ -1,6 +1,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "main.hpp"
 
+// * Sets everything up (gl/glfw/imgui)
+// * Handles glfw callbacks
+// * Globally accessible
+// ---
 class Engine {
     GLFWwindow *Window;
     ImGuiContext *Gui;
@@ -146,6 +150,8 @@ public:
     }
 };
 
+// Basic first person camera
+// ---------------
 class Camera {
     // Pitch/Yaw are in degrees
     float Pitch = 0.0f;
@@ -194,6 +200,8 @@ public:
     }
 };
 
+// Standard FPS camera with mousleook and WASD controls
+// ----------------
 class FPSCamera: public Camera {
 public:
     void Update() {
@@ -375,6 +383,7 @@ public:
 
         GLuint vertexShader;
         GLuint fragmentShader;
+        // --  VS/FS are unified in one source file --
         const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", source.c_str()};
         const char *fragmentSources[] = {"#version 450 core\n", "#define FRAGMENT_SHADER\n", source.c_str()};
         vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -458,6 +467,7 @@ public:
     }
 };
 
+// Forward decl.
 TexturePtr LoadTexture(string path);
 
 class Model {
