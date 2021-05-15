@@ -398,6 +398,7 @@ public:
 
 class Shader {
     GLuint Program = 0;
+    static GLuint ActiveProgram = 0;
 
 public:
     Shader(string path) {
@@ -491,7 +492,10 @@ public:
         );
     }
     void Use() {
-        glUseProgram(Program);
+        // Minimize state changes
+        if (ActiveProgram != Program)
+            glUseProgram(Program);
+        ActiveProgram = Program;
     }
 };
 
