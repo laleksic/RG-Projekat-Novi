@@ -12,14 +12,7 @@ uniform sampler2D BumpTexture;
 uniform Light Lights[32];
 uniform vec3 CameraPosition;
 uniform vec3 AmbientLight;
-uniform bool UseNormalMaps;
-uniform bool VisualizeNormals;
-uniform bool UseSpecular;
-uniform bool HighlightZeroNormals;
-uniform bool NormalizeAfterConvertingToWorldSpace;
 uniform bool Translucent;
-uniform bool VisualizeBumpMap;
-uniform bool NoLighting;
 uniform float ParallaxDepth;
 
 #if defined(VERTEX_SHADER)
@@ -161,13 +154,9 @@ VertexData {
         }
 
         vec3 tsNormal;
-        if (UseNormalMaps) {
-            tsNormal = normalSample.rgb;
-            tsNormal = 2*tsNormal - vec3(1);
-            tsNormal = normalize(tsNormal);
-        } else {
-            tsNormal = vec3(0,0,1);
-        }
+        tsNormal = normalSample.rgb;
+        tsNormal = 2*tsNormal - vec3(1);
+        tsNormal = normalize(tsNormal);
 
         mat3 invTBNMat = vertexData.InvTBNMat;
         for (int i=0; i<32; ++i) {
@@ -191,8 +180,7 @@ VertexData {
 
             // diffuseStrength = 0;
             color += attenuation * diffuseStrength * vec4(Lights[i].Color,1) * diffuseSample;
-            if (UseSpecular)
-                color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
+            color += attenuation * specularStrength * vec4(Lights[i].Color,1) * specularSample;
             
             // Too slow (do in deferred?)
             //color *= ParallaxMappingSelfShadowing(tsToLight, texCoords);

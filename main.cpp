@@ -742,7 +742,7 @@ typedef shared_ptr<Model> ModelPtr;
 
 class Main: public Engine {
     ModelPtr Sponza, Cube;
-    ShaderPtr BasicShader;
+    ShaderPtr BasicShader, LightCubeShader;
     FPSCamera Camera;
     mat4 ProjectionMatrix;
     int Argc;
@@ -753,14 +753,7 @@ class Main: public Engine {
     vector<Light> Lights[2];
     float lightLerp = 0.0f;
 
-    bool UseNormalMaps = false;
-    bool VisualizeNormals = false;
-    bool UseSpecular = true;
-    bool HighlightZeroNormals = true;
-    bool NormalizeAfterConvertingToWorldSpace = true;
-    bool VisualizeBumpMap = false;
-    bool NoLighting = false;
-    float ParallaxDepth = 0.05f;
+    float ParallaxDepth = 0.04f;
 
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -781,6 +774,7 @@ public:
         Sponza = make_shared<Model>(IO->FindDataFile("models/sponza.obj"), TexLoader);
         Cube = make_shared<Model>(IO->FindDataFile("models/cube.obj"), TexLoader);
         BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/BasicShader.glsl"));
+        LightCubeShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/LightCube.glsl"));
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
@@ -821,22 +815,8 @@ public:
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
 
-        ImGui::Checkbox("Use Normal Maps", &UseNormalMaps);
-        ImGui::Checkbox("Visualize Normals", &VisualizeNormals);       
-        ImGui::Checkbox("Use Specular", &UseSpecular);       
-        ImGui::Checkbox("Highlight Zero Normals", &HighlightZeroNormals);       
-        ImGui::Checkbox("Normalize After Converting To World Space", &NormalizeAfterConvertingToWorldSpace);       
-        ImGui::Checkbox("Visualize Bump Map", &VisualizeBumpMap);  
-        ImGui::Checkbox("No Lighting", &NoLighting);  
         ImGui::DragFloat("ParallaxDepth",&ParallaxDepth,
             0.01f, 0, 0.2f, "%f", 1.0f);     
-        BasicShader->SetUniform("UseNormalMaps", UseNormalMaps);
-        BasicShader->SetUniform("VisualizeNormals", VisualizeNormals);
-        BasicShader->SetUniform("UseSpecular", UseSpecular);
-        BasicShader->SetUniform("HighlightZeroNormals", HighlightZeroNormals);
-        BasicShader->SetUniform("NormalizeAfterConvertingToWorldSpace", NormalizeAfterConvertingToWorldSpace);
-        BasicShader->SetUniform("VisualizeBumpMap", VisualizeBumpMap);
-        BasicShader->SetUniform("NoLighting", NoLighting);
         BasicShader->SetUniform("ParallaxDepth", ParallaxDepth);
 
         BasicShader->Use( );
@@ -868,20 +848,23 @@ public:
             Sponza->BumpTextures[i]->Bind(3);
             Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
-        }   
+        }
 
-        modelMatrix = scale(vec3(1.0f));
-        modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
-        BasicShader->SetUniform("MVPMat", modelViewProjectionMatrix);
-        BasicShader->SetUniform("ModelMat", modelMatrix);
-        for (int i=0; i<Cube->Meshes.size(); ++i) {
-            Cube->DiffuseTextures[i]->Bind(0);
-            Cube->SpecularTextures[i]->Bind(1);
-            Cube->NormalTextures[i]->Bind(2);
-            Cube->BumpTextures[i]->Bind(3);
-            Cube->Meshes[i]->Bind();
-            Cube->Meshes[i]->Draw();
-        }     
+        LightCubeShader->Use();
+        for (int i=0; i<Lights[0].size(); ++i) {
+            vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
+            vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
+            modelMatrix = translate(lightPosition) * scale(vec3(0.125f));
+            modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
+            LightCubeShader->SetUniform("MVPMat", modelViewProjectionMatrix);
+            LightCubeShader->SetUniform("ModelMat", modelMatrix);
+            LightCubeShader->SetUniform("LightColor", lightColor);
+            for (int j=0; j<Cube->Meshes.size(); ++j) {
+                Cube->Meshes[j]->Bind();
+                Cube->Meshes[j]->Draw();
+            }  
+        }
+   
 
     }
     
