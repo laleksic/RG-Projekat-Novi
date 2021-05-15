@@ -389,7 +389,16 @@ class Shader {
     GLuint Program = 0;
 
 public:
-    Shader(string source) {
+    Shader(string path) {
+        path = "Data/"+path;
+        string source;
+        FILE *fp = fopen(path.c_str(), "r");
+        fseek(fp, 0, SEEK_END);
+        source.resize(ftell(fp));
+        rewind(fp);
+        fread(&source[0], 1, source.size(), fp);
+        fclose(fp);
+
         GLuint vertexShader;
         GLuint fragmentShader;
         const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", source.c_str()};
@@ -475,41 +484,6 @@ public:
     }
 };
 
-class IOUtils {
-    fs::path ExecutablePath;
-
-public:
-    IOUtils(fs::path executablePath): ExecutablePath(executablePath) {}
-    fs::path GetExecutablePath() const {
-        return ExecutablePath;
-    }    
-    fs::path GetDataPath() const {
-        return GetExecutablePath()/"Data";
-    }
-    fs::path FindDataFile(fs::path fileName) const {
-        fs::path fullPath = GetDataPath()/fileName;
-        if (fs::exists(fullPath)) {
-            return fullPath;
-        }
-        cerr << "Can't open data file " << fullPath << endl;
-        abort();       
-    }    
-    string LoadDataFileAsString(string fileName) const {
-        fs::path path = FindDataFile(fileName);
-        string pathString = path.string();
-        string contents;
-        FILE *fp = fopen(pathString.c_str(), "r");
-        fseek(fp, 0, SEEK_END);
-        contents.resize(ftell(fp));
-        rewind(fp);
-        fread(&contents[0], 1, contents.size(), fp);
-        fclose(fp);
-        return contents;
-    }
-};
-
-typedef shared_ptr<IOUtils> IOUtilsPtr;
-
 class RandomNumberGenerator {
 public:
     RandomNumberGenerator() {
@@ -525,13 +499,11 @@ public:
 
 class TextureLoader {
     map<fs::path, TexturePtr> LoadedTextures;
-    IOUtilsPtr IO;
 public:
-    TextureLoader(IOUtilsPtr io): IO(io){}
     TexturePtr Load(fs::path path) {
         auto it = LoadedTextures.find(path);
         if (it == LoadedTextures.end()) {
-            fs::path found = IO->FindDataFile(path);
+            fs::path found = fs::path("Data")/path;
             TexturePtr texture = make_shared<Texture>(found);
             LoadedTextures[path] = texture;
             return texture;
@@ -643,7 +615,6 @@ class Main: public Engine {
     mat4 ProjectionMatrix;
     int Argc;
     char **Argv;
-    IOUtilsPtr IO;
     TextureLoaderPtr TexLoader;
     RandomNumberGenerator RNG;
     vector<Light> Lights[2];
@@ -664,12 +635,11 @@ class Main: public Engine {
 
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
-        IO = make_shared<IOUtils>(GetExecutablePath());
-        TexLoader = make_shared<TextureLoader>(IO);
+        TexLoader = make_shared<TextureLoader>();
         Sponza = make_shared<Model>("Data/models/sponza.obj", TexLoader);
         Cube = make_shared<Model>("Data/models/cube.obj", TexLoader);
-        BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/BasicShader.glsl"));
-        LightCubeShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/LightCube.glsl"));
+        BasicShader = make_shared<Shader>("shaders/BasicShader.glsl");
+        LightCubeShader = make_shared<Shader>("shaders/LightCube.glsl");
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
