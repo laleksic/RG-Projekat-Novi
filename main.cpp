@@ -173,7 +173,7 @@ public:
     InputMasterPtr Input;
     Engine() {
         glfwSetErrorCallback([](int code, const char *msg){
-            fprintf(stderr, "GLFW error (%d): %s\n", code, msg);
+            cerr << "GLFW error (" << code << ")" << msg << endl;
             abort();
         });
         glfwInit();
@@ -193,7 +193,7 @@ public:
             GLenum severity, GLsizei length, const GLchar *message,
             const void *userParam) {
                 if (type == GL_DEBUG_TYPE_ERROR) {
-                    fprintf(stderr, "GL error: %s\n", message);
+                    cerr << "GL error: " << message << endl;
                     abort();
                 }
         }, 0);
@@ -251,11 +251,11 @@ public:
     Texture(string path) {
         glCreateTextures(GL_TEXTURE_2D, 1, &TextureID);
         int w, h;
-        fprintf(stderr, "Loading texture from %s\n", path.c_str());
+        cerr << "Loading texture from " << path << endl;
         int channels;
         GLubyte *pixels = stbi_load(path.c_str(), &w, &h, &channels, 4);
         if (!pixels) {
-            fprintf(stderr, "Failed to open texture at %s\n", path.c_str());
+            cerr << "Failed!" << endl;
             abort();
         }
         if (channels == 4)
@@ -420,7 +420,7 @@ public:
             glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetShaderInfoLog(vertexShader, bufSize, 0, &buf[0]);
-            fprintf(stderr, "Vertex shader error: %s\n", buf);
+            cerr << "Vertex shader error: " << buf << endl;
             abort();
         }
         glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &ok);
@@ -429,7 +429,7 @@ public:
             glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetShaderInfoLog(fragmentShader, bufSize, 0, &buf[0]);
-            fprintf(stderr, "Fragment shader error: %s\n", buf);
+            cerr << "Fragment shader error: " << buf << endl;
             abort();
         }
         glGetProgramiv(Program, GL_LINK_STATUS, &ok);
@@ -438,7 +438,7 @@ public:
             glGetProgramiv(Program, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetProgramInfoLog(Program, bufSize, 0, &buf[0]);
-            fprintf(stderr, "Shader linking error: %s\n", buf);
+            cerr << "Shader linking error: " << buf << endl;
             abort();
         }
 
@@ -534,27 +534,17 @@ public:
         const aiScene *scene = importer.ReadFile(path.c_str(), flags);
         scene = importer.ApplyPostProcessing(aiProcess_GenNormals | aiProcess_CalcTangentSpace);
         if (!scene) {
-            fprintf(stderr, "Couldn't load %s!\n", path.c_str());
+            cerr << "Couldn't load " << path << endl;
             abort();
         }
         for (int i=0; i<scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
-            if (!mesh->HasNormals()) {
-                fprintf(stderr, "Malformed (no normals) mesh in %s\n", path.c_str());
-                abort();
-            }
-            if (!mesh->HasPositions()) {
-                fprintf(stderr, "Malformed (no positions) mesh in %s\n", path.c_str());
-                abort();
-            }
-            if (!mesh->HasTextureCoords(0)) {
-                fprintf(stderr, "Malformed (no texcoords) mesh in %s\n", path.c_str());
-                abort();
-            }
-            if (!mesh->HasTangentsAndBitangents()) {
-                fprintf(stderr, "Malformed (no tangents & bitangents) mesh in %s\n", path.c_str());
-                abort();
-            }
+            
+            assert(mesh->HasNormals());
+            assert(mesh->HasPositions());
+            assert(mesh->HasTextureCoords(0));
+            assert(mesh->HasTangentsAndBitangents());
+
             MeshPtr meshp = make_shared<Mesh>();
             meshp->Positions.resize(mesh->mNumVertices);
             meshp->Colors.resize(mesh->mNumVertices);
