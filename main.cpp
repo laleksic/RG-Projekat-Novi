@@ -490,24 +490,26 @@ float RandomFloat(float lo, float hi) {
     return lo + RandomFloat() * (hi-lo);
 }
 
-class TextureLoader {
-    map<string, TexturePtr> LoadedTextures;
-public:
-    TexturePtr Load(string path) {
-        auto it = LoadedTextures.find(path);
-        if (it == LoadedTextures.end()) {
-            string found = "Data/"+path;
-            TexturePtr texture = make_shared<Texture>(found);
-            LoadedTextures[path] = texture;
-            return texture;
-        }
-        return it->second;
-    }
-};
-
-typedef shared_ptr<TextureLoader> TextureLoaderPtr;
 typedef shared_ptr<Mesh> MeshPtr;
 typedef shared_ptr<Shader> ShaderPtr;
+
+TexturePtr LoadTexture(string path) {
+    // Cache textures here so we don't load same texture many times over
+    static map<string, TexturePtr> LoadedTextures;
+
+    auto it = LoadedTextures.find(path);
+    if (it == LoadedTextures.end()) {
+        string found = "Data/"+path;
+        TexturePtr texture = make_shared<Texture>(found);
+        LoadedTextures[path] = texture;
+        return texture;
+    }
+    return it->second;
+}
+ShaderPtr LoadShader(string path) {
+    return make_shared<Shader>(path);
+}
+
 
 class Model {
 public:
@@ -517,7 +519,7 @@ public:
     vector<TexturePtr> NormalTextures;
     vector<TexturePtr> BumpTextures;
 
-    Model(string path, TextureLoaderPtr textureLoader) {
+    Model(string path) {
         Assimp::Importer importer;
         unsigned flags = 0;
         flags |= aiProcess_Triangulate;
@@ -574,13 +576,19 @@ public:
             specularMapPath = (specularMapPath.length==0)?aiString("textures/black.png"):specularMapPath;
             normalMapPath = (normalMapPath.length==0)?aiString("textures/blankNormal.png"):normalMapPath;
             bumpMapPath = (bumpMapPath.length==0)?aiString("textures/black.png"):bumpMapPath;
-            DiffuseTextures.push_back(textureLoader->Load(diffuseMapPath.C_Str()));
-            SpecularTextures.push_back(textureLoader->Load(specularMapPath.C_Str()));
-            NormalTextures.push_back(textureLoader->Load(normalMapPath.C_Str()));
-            BumpTextures.push_back(textureLoader->Load(bumpMapPath.C_Str()));
+            DiffuseTextures.push_back(LoadTexture(diffuseMapPath.C_Str()));
+            SpecularTextures.push_back(LoadTexture(specularMapPath.C_Str()));
+            NormalTextures.push_back(LoadTexture(normalMapPath.C_Str()));
+            BumpTextures.push_back(LoadTexture(bumpMapPath.C_Str()));
         }        
     }
 };
+
+typedef shared_ptr<Model> ModelPtr;
+
+ModelPtr LoadModel(string path) {
+    return make_shared<Model>(path);
+}
 
 class Light {
 public:
@@ -588,7 +596,6 @@ public:
     vec3 Color;
 };
 
-typedef shared_ptr<Model> ModelPtr;
 
 class Main: public Engine {
     ModelPtr Sponza, Cube;
@@ -597,7 +604,6 @@ class Main: public Engine {
     mat4 ProjectionMatrix;
     int Argc;
     char **Argv;
-    TextureLoaderPtr TexLoader;
     vector<Light> Lights[2];
     float lightLerp = 0.0f;
 
@@ -613,11 +619,10 @@ class Main: public Engine {
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         srand(time(0));
-        TexLoader = make_shared<TextureLoader>();
-        Sponza = make_shared<Model>("Data/models/sponza.obj", TexLoader);
-        Cube = make_shared<Model>("Data/models/cube.obj", TexLoader);
-        BasicShader = make_shared<Shader>("shaders/BasicShader.glsl");
-        LightCubeShader = make_shared<Shader>("shaders/LightCube.glsl");
+        Sponza = LoadModel("Data/models/sponza.obj");
+        Cube = LoadModel("Data/models/cube.obj");
+        BasicShader = LoadShader("shaders/BasicShader.glsl");
+        LightCubeShader = LoadShader("shaders/LightCube.glsl");
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
