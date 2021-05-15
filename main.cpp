@@ -368,17 +368,28 @@ public:
     }    
 };
 
-// Forward decl.
-TexturePtr LoadTexture(string path);
+template<class Resource>
+shared_ptr<Resource> Load(string path) {
+    using ResPtr = shared_ptr<Resource>;
+    static map<string, ResPtr> Loaded;
+
+    auto it = Loaded.find(path);
+    if (it == Loaded.end()) {
+        ResPtr res = make_shared<Resource>(path);
+        Loaded[path] = res;
+        return res;
+    }
+    return it->second;    
+}
 
 class Material {
 public:    
-    TexturePtr DiffuseMap = LoadTexture("Data/textures/white.png");
-    TexturePtr SpecularMap = LoadTexture("Data/textures/black.png");
-    TexturePtr NormalMap = LoadTexture("Data/textures/blankNormal.png");
+    TexturePtr DiffuseMap = Load<Texture>("Data/textures/white.png");
+    TexturePtr SpecularMap = Load<Texture>("Data/textures/black.png");
+    TexturePtr NormalMap = Load<Texture>("Data/textures/blankNormal.png");
 
     // --For parallax mapping
-    TexturePtr BumpMap = LoadTexture("Data/textures/black.png"); 
+    TexturePtr BumpMap = Load<Texture>("Data/textures/black.png"); 
     
     bool Translucent = false; // --No backface culling + Diffuse light
                               //   affects both front&back faces ...
@@ -544,10 +555,10 @@ public:
             material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
             material->GetTexture(aiTextureType_HEIGHT, 0, &bumpMapPath);
             Material mat;
-            if (diffuseMapPath.length!=0) mat.DiffuseMap = LoadTexture(diffuseMapPath.C_Str());
-            if (specularMapPath.length!=0) mat.SpecularMap = LoadTexture(specularMapPath.C_Str());
-            if (normalMapPath.length!=0) mat.NormalMap = LoadTexture(normalMapPath.C_Str());
-            if (bumpMapPath.length!=0) mat.BumpMap = LoadTexture(bumpMapPath.C_Str());
+            if (diffuseMapPath.length!=0) mat.DiffuseMap = Load<Texture>(diffuseMapPath.C_Str());
+            if (specularMapPath.length!=0) mat.SpecularMap = Load<Texture>(specularMapPath.C_Str());
+            if (normalMapPath.length!=0) mat.NormalMap = Load<Texture>(normalMapPath.C_Str());
+            if (bumpMapPath.length!=0) mat.BumpMap = Load<Texture>(bumpMapPath.C_Str());
             if (mat.DiffuseMap->ShouldAlphaClip()) {
                 mat.Translucent = true;
             }
@@ -562,24 +573,6 @@ public:
     vec3 Color;
 };
 
-ModelPtr LoadModel(string path) {
-    return make_shared<Model>(path);
-}
-TexturePtr LoadTexture(string path) {
-    // Cache textures here so we don't load same texture many times over
-    static map<string, TexturePtr> LoadedTextures;
-
-    auto it = LoadedTextures.find(path);
-    if (it == LoadedTextures.end()) {
-        TexturePtr texture = make_shared<Texture>(path);
-        LoadedTextures[path] = texture;
-        return texture;
-    }
-    return it->second;
-}
-ShaderPtr LoadShader(string path) {
-    return make_shared<Shader>(path);
-}
 float RandomFloat() {
     return rand() / (float)RAND_MAX;
 }
@@ -606,10 +599,10 @@ void CalculateViewportAndProjectionMatrix() {
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
 
-    Sponza = LoadModel("Data/models/sponza.obj");
-    Cube = LoadModel("Data/models/cube.obj");
-    BasicShader = LoadShader("Data/shaders/BasicShader.glsl");
-    LightCubeShader = LoadShader("Data/shaders/LightCube.glsl");
+    Sponza = Load<Model>("Data/models/sponza.obj");
+    Cube = Load<Model>("Data/models/cube.obj");
+    BasicShader = Load<Shader>("Data/shaders/BasicShader.glsl");
+    LightCubeShader = Load<Shader>("Data/shaders/LightCube.glsl");
 
     Camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
     CalculateViewportAndProjectionMatrix();
