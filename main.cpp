@@ -590,8 +590,6 @@ class Main: public Engine {
     ShaderPtr BasicShader, LightCubeShader;
     FPSCamera Camera;
     mat4 ProjectionMatrix;
-    int Argc;
-    char **Argv;
     vector<Light> Lights[2];
     float lightLerp = 0.0f;
 
@@ -605,7 +603,7 @@ class Main: public Engine {
     }
 
 public:
-    Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
+    Main(): Camera(Input) {
         srand(time(0));
         Sponza = LoadModel("Data/models/sponza.obj");
         Cube = LoadModel("Data/models/cube.obj");
