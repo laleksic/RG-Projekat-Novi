@@ -368,6 +368,23 @@ public:
     }    
 };
 
+// Forward decl.
+TexturePtr LoadTexture(string path);
+
+class Material {
+public:    
+    TexturePtr DiffuseMap = LoadTexture("Data/textures/white.png");
+    TexturePtr SpecularMap = LoadTexture("Data/textures/black.png");
+    TexturePtr NormalMap = LoadTexture("Data/textures/blankNormal.png");
+
+    // --For parallax mapping
+    TexturePtr BumpMap = LoadTexture("Data/textures/black.png"); 
+    
+    bool Translucent = false; // --No backface culling + Diffuse light
+                              //   affects both front&back faces ...
+                              //  ( for nice leaf rendering )
+};
+
 class Shader {
     GLuint Program = 0;
 
@@ -467,16 +484,11 @@ public:
     }
 };
 
-// Forward decl.
-TexturePtr LoadTexture(string path);
 
 class Model {
 public:
     vector<MeshPtr> Meshes;
-    vector<TexturePtr> DiffuseTextures;
-    vector<TexturePtr> SpecularTextures;
-    vector<TexturePtr> NormalTextures;
-    vector<TexturePtr> BumpTextures;
+    vector<Material> Materials;
 
     Model(string path) {
         Assimp::Importer importer;
@@ -531,14 +543,15 @@ public:
             material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
             material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
             material->GetTexture(aiTextureType_HEIGHT, 0, &bumpMapPath);
-            diffuseMapPath = (diffuseMapPath.length==0)?aiString("Data/textures/white.png"):diffuseMapPath;
-            specularMapPath = (specularMapPath.length==0)?aiString("Data/textures/black.png"):specularMapPath;
-            normalMapPath = (normalMapPath.length==0)?aiString("Data/textures/blankNormal.png"):normalMapPath;
-            bumpMapPath = (bumpMapPath.length==0)?aiString("Data/textures/black.png"):bumpMapPath;
-            DiffuseTextures.push_back(LoadTexture(diffuseMapPath.C_Str()));
-            SpecularTextures.push_back(LoadTexture(specularMapPath.C_Str()));
-            NormalTextures.push_back(LoadTexture(normalMapPath.C_Str()));
-            BumpTextures.push_back(LoadTexture(bumpMapPath.C_Str()));
+            Material mat;
+            if (diffuseMapPath.length!=0) mat.DiffuseMap = LoadTexture(diffuseMapPath.C_Str());
+            if (specularMapPath.length!=0) mat.SpecularMap = LoadTexture(specularMapPath.C_Str());
+            if (normalMapPath.length!=0) mat.NormalMap = LoadTexture(normalMapPath.C_Str());
+            if (bumpMapPath.length!=0) mat.BumpMap = LoadTexture(bumpMapPath.C_Str());
+            if (mat.DiffuseMap->ShouldAlphaClip()) {
+                mat.Translucent = true;
+            }
+            Materials.push_back(mat);
         }        
     }
 };
@@ -656,7 +669,7 @@ int main(int argc, char** argv) {
         lightLerp = (sin(glfwGetTime())+1.0)/2.0;
 
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
-            if (Sponza->DiffuseTextures[i]->ShouldAlphaClip()) {
+            if (Sponza->Materials[i].Translucent) {
                 glDisable(GL_CULL_FACE);
                 BasicShader->SetUniform("Translucent", true);
             } else {
@@ -664,10 +677,10 @@ int main(int argc, char** argv) {
                 glCullFace(GL_BACK);
                 BasicShader->SetUniform("Translucent", false);
             }
-            Sponza->DiffuseTextures[i]->Bind(0);
-            Sponza->SpecularTextures[i]->Bind(1);
-            Sponza->NormalTextures[i]->Bind(2);
-            Sponza->BumpTextures[i]->Bind(3);
+            Sponza->Materials[i].DiffuseMap->Bind(0);
+            Sponza->Materials[i].SpecularMap->Bind(1);
+            Sponza->Materials[i].NormalMap->Bind(2);
+            Sponza->Materials[i].BumpMap->Bind(3);
             Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
         }
