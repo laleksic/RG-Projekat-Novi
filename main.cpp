@@ -760,7 +760,7 @@ class Main: public Engine {
     bool NormalizeAfterConvertingToWorldSpace = true;
     bool VisualizeBumpMap = false;
     bool NoLighting = false;
-    float ParallaxStrength = 0.01f;
+    float ParallaxDepth = 0.09f;
 
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
@@ -828,8 +828,8 @@ public:
         ImGui::Checkbox("Normalize After Converting To World Space", &NormalizeAfterConvertingToWorldSpace);       
         ImGui::Checkbox("Visualize Bump Map", &VisualizeBumpMap);  
         ImGui::Checkbox("No Lighting", &NoLighting);  
-        ImGui::DragFloat("ParallaxStrength",&ParallaxStrength,
-            0.01f, -0.2f, 0.2f, "%f", 1.0f);     
+        ImGui::DragFloat("ParallaxDepth",&ParallaxDepth,
+            0.01f, 0, 0.2f, "%f", 1.0f);     
         BasicShader->SetUniform("UseNormalMaps", UseNormalMaps);
         BasicShader->SetUniform("VisualizeNormals", VisualizeNormals);
         BasicShader->SetUniform("UseSpecular", UseSpecular);
@@ -837,7 +837,7 @@ public:
         BasicShader->SetUniform("NormalizeAfterConvertingToWorldSpace", NormalizeAfterConvertingToWorldSpace);
         BasicShader->SetUniform("VisualizeBumpMap", VisualizeBumpMap);
         BasicShader->SetUniform("NoLighting", NoLighting);
-        BasicShader->SetUniform("ParallaxStrength", ParallaxStrength);
+        BasicShader->SetUniform("ParallaxDepth", ParallaxDepth);
 
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  

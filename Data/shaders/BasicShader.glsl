@@ -20,7 +20,7 @@ uniform bool NormalizeAfterConvertingToWorldSpace;
 uniform bool Translucent;
 uniform bool VisualizeBumpMap;
 uniform bool NoLighting;
-uniform float ParallaxStrength;
+uniform float ParallaxDepth;
 
 #if defined(VERTEX_SHADER)
 out
@@ -87,7 +87,7 @@ VertexData {
         tsToCamera.y *= -1; // Ovo popravlja stvari, iz nekog razloga...
         vec2 texCoordsOffset = (tsToCamera * depth).xy;
         tsToCamera.y *= -1;
-        vec2 texCoords = vertexData.TexCoords + ParallaxStrength * texCoordsOffset;
+        vec2 texCoords = vertexData.TexCoords - ParallaxDepth * texCoordsOffset;
       
         vec4 diffuseSample = texture(DiffuseTexture, texCoords);
         vec4 specularSample = texture(SpecularTexture, texCoords);
