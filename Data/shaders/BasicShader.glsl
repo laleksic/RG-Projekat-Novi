@@ -104,10 +104,21 @@ VertexData {
         // This fixes things for "reasons"
         tsToCamera.y *= -1;
 
+        float mipLevel = (textureQueryLod(BumpTexture, st).y);
+        float align = 1-max(0, dot(tsToCamera, vec3(0,0,1)));
+        float quality;
+        if (mipLevel < 0.1) {
+            quality = 1;
+        } else {
+            quality = align * 1/(mipLevel);
+        }
+
         // Steep parallax mapping
-        int LAYER_COUNT = 32;
-        float depthStep = ParallaxDepth / LAYER_COUNT;
-        vec2 stStep = -(tsToCamera.xy * ParallaxDepth) / LAYER_COUNT;
+        float minLayers = 4;
+        float maxLayers = 32;
+        float layerCount = mix(minLayers, maxLayers, quality);
+        float depthStep = ParallaxDepth / layerCount;
+        vec2 stStep = -(tsToCamera.xy * ParallaxDepth) / layerCount;
 
         float currLayerDepth = 0;
         while (currLayerDepth < ParallaxDepth) {
@@ -120,8 +131,10 @@ VertexData {
         }
 
         // Relief parallax mapping
-        int RELIEF_STEPS = 8;
-        for (int i=0; i<RELIEF_STEPS; ++i) {
+        float minSteps = 2;
+        float maxSteps = 16;
+        float reliefSteps = mix(minSteps, maxSteps, quality);
+        for (int i=0; i<int(reliefSteps); ++i) {
             depthStep /= 2;
             stStep /= 2;
             // check if under surface
