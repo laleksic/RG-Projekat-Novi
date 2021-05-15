@@ -248,15 +248,14 @@ class Texture {
     bool HasAlphaChannel = false;
 
 public:
-    Texture(fs::path path) {
+    Texture(string path) {
         glCreateTextures(GL_TEXTURE_2D, 1, &TextureID);
         int w, h;
-        string pathString = path.string();
-        fprintf(stderr, "Loading texture from %s\n", pathString.c_str());
+        fprintf(stderr, "Loading texture from %s\n", path.c_str());
         int channels;
-        GLubyte *pixels = stbi_load(pathString.c_str(), &w, &h, &channels, 4);
+        GLubyte *pixels = stbi_load(path.c_str(), &w, &h, &channels, 4);
         if (!pixels) {
-            fprintf(stderr, "Failed to open texture at %s\n", pathString.c_str());
+            fprintf(stderr, "Failed to open texture at %s\n", path.c_str());
             abort();
         }
         if (channels == 4)
@@ -498,12 +497,12 @@ public:
 };
 
 class TextureLoader {
-    map<fs::path, TexturePtr> LoadedTextures;
+    map<string, TexturePtr> LoadedTextures;
 public:
-    TexturePtr Load(fs::path path) {
+    TexturePtr Load(string path) {
         auto it = LoadedTextures.find(path);
         if (it == LoadedTextures.end()) {
-            fs::path found = fs::path("Data")/path;
+            string found = string("Data/")+path;
             TexturePtr texture = make_shared<Texture>(found);
             LoadedTextures[path] = texture;
             return texture;
@@ -524,37 +523,36 @@ public:
     vector<TexturePtr> NormalTextures;
     vector<TexturePtr> BumpTextures;
 
-    Model(fs::path path, TextureLoaderPtr textureLoader) {
+    Model(string path, TextureLoaderPtr textureLoader) {
         Assimp::Importer importer;
-        string pathString = path.string();
         unsigned flags = 0;
         flags |= aiProcess_Triangulate;
         flags |= aiProcess_PreTransformVertices;
         flags |= aiProcess_FlipUVs;
         flags |= aiProcess_FixInfacingNormals;
         flags |= aiProcess_FindInvalidData;
-        const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
+        const aiScene *scene = importer.ReadFile(path.c_str(), flags);
         scene = importer.ApplyPostProcessing(aiProcess_GenNormals | aiProcess_CalcTangentSpace);
         if (!scene) {
-            fprintf(stderr, "Couldn't load %s!\n", pathString.c_str());
+            fprintf(stderr, "Couldn't load %s!\n", path.c_str());
             abort();
         }
         for (int i=0; i<scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
             if (!mesh->HasNormals()) {
-                fprintf(stderr, "Malformed (no normals) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no normals) mesh in %s\n", path.c_str());
                 abort();
             }
             if (!mesh->HasPositions()) {
-                fprintf(stderr, "Malformed (no positions) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no positions) mesh in %s\n", path.c_str());
                 abort();
             }
             if (!mesh->HasTextureCoords(0)) {
-                fprintf(stderr, "Malformed (no texcoords) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no texcoords) mesh in %s\n", path.c_str());
                 abort();
             }
             if (!mesh->HasTangentsAndBitangents()) {
-                fprintf(stderr, "Malformed (no tangents & bitangents) mesh in %s\n", pathString.c_str());
+                fprintf(stderr, "Malformed (no tangents & bitangents) mesh in %s\n", path.c_str());
                 abort();
             }
             MeshPtr meshp = make_shared<Mesh>();
@@ -627,10 +625,6 @@ class Main: public Engine {
         float aspectRatio = (float)windowSize.x / windowSize.y;
         ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
         glViewport(0,0, windowSize.x, windowSize.y);
-    }
-    fs::path GetExecutablePath() const {
-        // https://stackoverflow.com/a/55579815
-        return fs::weakly_canonical(fs::path(Argv[0])).parent_path();
     }
 
 public:

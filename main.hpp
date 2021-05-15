@@ -20,9 +20,7 @@
 #include <vector>
 #include <string>
 #include <memory>
-#include <filesystem>
 #include <map>
 #include <iostream>
 using namespace glm;
 using namespace std;
-namespace fs = filesystem;
