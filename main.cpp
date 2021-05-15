@@ -456,6 +456,12 @@ public:
             value?GL_TRUE:GL_FALSE
         );
     }         
+    void SetUniform(string name, float value) {
+        glProgramUniform1f(Program, 
+            glGetUniformLocation(Program, name.c_str()),
+            value
+        );
+    }             
     void SetUniform(string name, vec3 value) {
         glProgramUniform3fv(Program,
             glGetUniformLocation(Program, name.c_str()),
@@ -717,7 +723,7 @@ public:
             diffuseMapPath = (diffuseMapPath.length==0)?aiString("textures/white.png"):diffuseMapPath;
             specularMapPath = (specularMapPath.length==0)?aiString("textures/black.png"):specularMapPath;
             normalMapPath = (normalMapPath.length==0)?aiString("textures/blankNormal.png"):normalMapPath;
-            bumpMapPath = (bumpMapPath.length==0)?aiString("textures/white.png"):bumpMapPath;
+            bumpMapPath = (bumpMapPath.length==0)?aiString("textures/black.png"):bumpMapPath;
             DiffuseTextures.push_back(textureLoader->Load(diffuseMapPath.C_Str()));
             SpecularTextures.push_back(textureLoader->Load(specularMapPath.C_Str()));
             NormalTextures.push_back(textureLoader->Load(normalMapPath.C_Str()));
@@ -735,7 +741,7 @@ public:
 typedef shared_ptr<Model> ModelPtr;
 
 class Main: public Engine {
-    ModelPtr Sponza;
+    ModelPtr Sponza, Cube;
     ShaderPtr BasicShader;
     FPSCamera Camera;
     mat4 ProjectionMatrix;
@@ -753,7 +759,9 @@ class Main: public Engine {
     bool HighlightZeroNormals = true;
     bool NormalizeAfterConvertingToWorldSpace = true;
     bool VisualizeBumpMap = false;
-    
+    bool NoLighting = false;
+    float ParallaxStrength = 0.01f;
+
     void CalculateViewport() {
         ivec2 windowSize = Input->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
@@ -771,6 +779,7 @@ public:
         TexLoader = make_shared<TextureLoader>(IO);
         // Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
         Sponza = make_shared<Model>(IO->FindDataFile("models/sponza.obj"), TexLoader);
+        Cube = make_shared<Model>(IO->FindDataFile("models/cube.obj"), TexLoader);
         BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/BasicShader.glsl"));
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
@@ -817,13 +826,18 @@ public:
         ImGui::Checkbox("Use Specular", &UseSpecular);       
         ImGui::Checkbox("Highlight Zero Normals", &HighlightZeroNormals);       
         ImGui::Checkbox("Normalize After Converting To World Space", &NormalizeAfterConvertingToWorldSpace);       
-        ImGui::Checkbox("Visualize Bump Map", &VisualizeBumpMap);       
+        ImGui::Checkbox("Visualize Bump Map", &VisualizeBumpMap);  
+        ImGui::Checkbox("No Lighting", &NoLighting);  
+        ImGui::DragFloat("ParallaxStrength",&ParallaxStrength,
+            0.01f, -0.2f, 0.2f, "%f", 1.0f);     
         BasicShader->SetUniform("UseNormalMaps", UseNormalMaps);
         BasicShader->SetUniform("VisualizeNormals", VisualizeNormals);
         BasicShader->SetUniform("UseSpecular", UseSpecular);
         BasicShader->SetUniform("HighlightZeroNormals", HighlightZeroNormals);
         BasicShader->SetUniform("NormalizeAfterConvertingToWorldSpace", NormalizeAfterConvertingToWorldSpace);
         BasicShader->SetUniform("VisualizeBumpMap", VisualizeBumpMap);
+        BasicShader->SetUniform("NoLighting", NoLighting);
+        BasicShader->SetUniform("ParallaxStrength", ParallaxStrength);
 
         BasicShader->Use( );
         BasicShader->SetUniform("DiffuseTexture", 0);  
@@ -854,8 +868,23 @@ public:
             Sponza->BumpTextures[i]->Bind(3);
             Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
+        }   
+
+        modelMatrix = scale(vec3(1.0f));
+        modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
+        BasicShader->SetUniform("ModelViewProjection", modelViewProjectionMatrix);
+        BasicShader->SetUniform("Model", modelMatrix);
+        for (int i=0; i<Cube->Meshes.size(); ++i) {
+            Cube->DiffuseTextures[i]->Bind(0);
+            Cube->SpecularTextures[i]->Bind(1);
+            Cube->NormalTextures[i]->Bind(2);
+            Cube->BumpTextures[i]->Bind(3);
+            Cube->Meshes[i]->Bind();
+            Cube->Meshes[i]->Draw();
         }     
+
     }
+    
 };
 
 int main(int argc, char** argv) {

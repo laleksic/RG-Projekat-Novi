@@ -19,6 +19,8 @@ uniform bool HighlightZeroNormals;
 uniform bool NormalizeAfterConvertingToWorldSpace;
 uniform bool Translucent;
 uniform bool VisualizeBumpMap;
+uniform bool NoLighting;
+uniform float ParallaxStrength;
 
 #if defined(VERTEX_SHADER)
 out
@@ -71,13 +73,20 @@ VertexData {
     void main() {
         vec4 color = vec4(0,0,0,1);
         vec4 bumpSample = texture(BumpTexture, vertexData.TexCoords);
+        float depth = bumpSample.r;
+        vec3 tangentSpaceCameraPosition = vertexData.TangentBitangentNormalMatrix * CameraPosition;
+        vec3 tangentSpacePosition = vertexData.TangentBitangentNormalMatrix * vertexData.WorldSpacePosition;
+        vec3 tangentSpaceToCamera = normalize(tangentSpaceCameraPosition - tangentSpacePosition);
+        vec2 texCoordsOffset = (tangentSpaceToCamera * depth).xy;
+        vec2 texCoords = vertexData.TexCoords + ParallaxStrength * texCoordsOffset;
+      
+        // vec3 position = vertexData.WorldSpacePosition + normalize(toCamera) * depth;
+        vec3 position = vertexData.WorldSpacePosition;
+        vec3 toCamera = CameraPosition - position;
 
-        // todo parallax mapping here
-        // ...
-
-        vec4 diffuseSample = texture(DiffuseTexture, vertexData.TexCoords);
-        vec4 specularSample = texture(SpecularTexture, vertexData.TexCoords);
-        vec4 normalSample = texture(NormalTexture, vertexData.TexCoords);
+        vec4 diffuseSample = texture(DiffuseTexture, texCoords);
+        vec4 specularSample = texture(SpecularTexture, texCoords);
+        vec4 normalSample = texture(NormalTexture, texCoords);
         if (diffuseSample.a < 0.5) {
             discard;
         }
@@ -98,10 +107,9 @@ VertexData {
 
         
 
-        vec3 toCamera = CameraPosition - vertexData.WorldSpacePosition;
         
         for (int i=0; i<32; ++i) {
-            vec3 toLight = Lights[i].Position - vertexData.WorldSpacePosition;
+            vec3 toLight = Lights[i].Position - position;
             float distanceToLight = length(toLight);
             float lambertFactor = max(0,dot(normalize(toLight), normal));
             if (Translucent) {
@@ -127,6 +135,8 @@ VertexData {
             Color = vec4((normal+vec3(1))/2, 1);
         else if (VisualizeBumpMap)
             Color = bumpSample;
+        else if (NoLighting)
+            Color = diffuseSample;
 
         if (length(normal) < 0.1 && HighlightZeroNormals)
             Color = vec4(1,0,0,1);
