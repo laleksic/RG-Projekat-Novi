@@ -168,6 +168,7 @@ public:
 class Engine {
     GLFWwindow *Window;
     ImGuiContext *Gui;
+    bool FirstFrame = true;
 
     void Begin() {
         Input->NewFrame();  
@@ -228,15 +229,17 @@ public:
         glfwDestroyWindow(Window);
         glfwTerminate();
     }
-    void Run() {
-        while (!glfwWindowShouldClose(Window)) {
-            Begin();
-            OnFrame(); 
+    bool Run() {
+        if (!FirstFrame)
             End();
+        FirstFrame = false;
+        Begin();
+        if (glfwWindowShouldClose(Window)) {
+            End();
+            return false;
         }
+        return true;
     }
-
-    virtual void OnFrame() = 0;
 };
 
 class Texture {
@@ -583,36 +586,38 @@ float RandomFloat(float lo, float hi) {
     return lo + RandomFloat() * (hi-lo);
 }
 
-class Main: public Engine {
-    ModelPtr Sponza, Cube;
-    ShaderPtr BasicShader, LightCubeShader;
-    FPSCamera Camera;
-    mat4 ProjectionMatrix;
-    vector<Light> Lights[2];
-    float lightLerp = 0.0f;
+ModelPtr Sponza, Cube;
+ShaderPtr BasicShader, LightCubeShader;
+FPSCameraPtr Camera;
+mat4 ProjectionMatrix;
+vector<Light> Lights[2];
+float lightLerp = 0.0f;
 
-    float ParallaxDepth = 0.04f;
+float ParallaxDepth = 0.04f;
 
-    void CalculateViewport() {
-        ivec2 windowSize = Input->GetWindowSize();
-        float aspectRatio = (float)windowSize.x / windowSize.y;
-        ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
-        glViewport(0,0, windowSize.x, windowSize.y);
-    }
+void CalculateViewport(InputMasterPtr input) {
+    ivec2 windowSize = input->GetWindowSize();
+    float aspectRatio = (float)windowSize.x / windowSize.y;
+    ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
+    glViewport(0,0, windowSize.x, windowSize.y);
+}
 
-public:
-    Main(): Camera(Input) {
-        srand(time(0));
-        Sponza = LoadModel("Data/models/sponza.obj");
-        Cube = LoadModel("Data/models/cube.obj");
-        BasicShader = LoadShader("Data/shaders/BasicShader.glsl");
-        LightCubeShader = LoadShader("Data/shaders/LightCube.glsl");
+int main(int argc, char** argv) {
+    Engine engine;
 
-        Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
-        CalculateViewport();
+    Camera = make_shared<FPSCamera>(engine.Input);
 
-        const int LIGHT_COUNT = 32;
-        for (int j=0; j<2; ++j) {
+    srand(time(0));
+    Sponza = LoadModel("Data/models/sponza.obj");
+    Cube = LoadModel("Data/models/cube.obj");
+    BasicShader = LoadShader("Data/shaders/BasicShader.glsl");
+    LightCubeShader = LoadShader("Data/shaders/LightCube.glsl");
+
+    Camera->SetPosition(vec3(0.0f, 2.0f, 2.0f));  
+    CalculateViewport(engine.Input);
+
+    const int LIGHT_COUNT = 32;
+    for (int j=0; j<2; ++j) {
         for (int i=0; i<LIGHT_COUNT; ++i) {
             Light light;
             light.Position = vec3(
@@ -627,21 +632,21 @@ public:
             );
             Lights[j].push_back(light);
         }
-        }
     }
-    virtual void OnFrame() override final {
-        if (Input->WasWindowResized()) {
-            CalculateViewport();
+
+    while (engine.Run()) {
+        if (engine.Input->WasWindowResized()) {
+            CalculateViewport(engine.Input);
         }
 
-        Camera.Update();
+        Camera->Update();
 
         mat4 modelMatrix = scale(vec3(0.01f));
-        mat4 viewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
+        mat4 viewProjectionMatrix = ProjectionMatrix * Camera->GetViewMatrix();
         mat4 modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
         BasicShader->SetUniform("MVPMat", modelViewProjectionMatrix);
         BasicShader->SetUniform("ModelMat", modelMatrix);
-        BasicShader->SetUniform("CameraPosition", Camera.GetPosition());
+        BasicShader->SetUniform("CameraPosition", Camera->GetPosition());
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -696,14 +701,5 @@ public:
                 Cube->Meshes[j]->Draw();
             }  
         }
-   
-
     }
-    
-};
-
-int main(int argc, char** argv) {
-    Main app;
-    app.Run();
-    return 0;
 }
