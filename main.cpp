@@ -33,6 +33,8 @@ class Engine {
     }
 public:
     Engine() {
+        srand(time(0));
+
         // Init glfw/gl
         // ------------
         glfwSetErrorCallback([](int code, const char *msg){
@@ -579,7 +581,6 @@ void CalculateViewportAndProjectionMatrix() {
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
 
-    srand(time(0));
     Sponza = LoadModel("Data/models/sponza.obj");
     Cube = LoadModel("Data/models/cube.obj");
     BasicShader = LoadShader("Data/shaders/BasicShader.glsl");
