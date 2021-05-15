@@ -236,9 +236,7 @@ public:
             glfwSwapBuffers(Window);
         }
     }
-    void Quit() {
-        glfwSetWindowShouldClose(Window, GLFW_TRUE);
-    }
+
     virtual void OnFrame() = 0;
 };
 
