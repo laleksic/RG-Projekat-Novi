@@ -24,3 +24,14 @@
 #include <iostream>
 using namespace glm;
 using namespace std;
+
+class Texture;
+class InputMaster;
+class Model;
+class Mesh;
+class Shader;
+typedef shared_ptr<Texture> TexturePtr;
+typedef shared_ptr<InputMaster> InputMasterPtr;
+typedef shared_ptr<Model> ModelPtr;
+typedef shared_ptr<Mesh> MeshPtr;
+typedef shared_ptr<Shader> ShaderPtr;

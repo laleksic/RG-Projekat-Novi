@@ -135,7 +135,6 @@ public:
     }
 };
 
-typedef shared_ptr<InputMaster> InputMasterPtr;
 
 class FPSCamera: public Camera {
     InputMasterPtr Input;
@@ -276,7 +275,6 @@ public:
     bool ShouldAlphaClip() const { return HasAlphaChannel; }
 };
 
-typedef shared_ptr<Texture> TexturePtr;
 
 class Mesh {
     GLuint VertexArray;
@@ -389,7 +387,6 @@ class Shader {
 
 public:
     Shader(string path) {
-        path = "Data/"+path;
         string source;
         FILE *fp = fopen(path.c_str(), "r");
         fseek(fp, 0, SEEK_END);
@@ -483,33 +480,7 @@ public:
     }
 };
 
-float RandomFloat() {
-    return rand() / (float)RAND_MAX;
-}
-float RandomFloat(float lo, float hi) {
-    return lo + RandomFloat() * (hi-lo);
-}
-
-typedef shared_ptr<Mesh> MeshPtr;
-typedef shared_ptr<Shader> ShaderPtr;
-
-TexturePtr LoadTexture(string path) {
-    // Cache textures here so we don't load same texture many times over
-    static map<string, TexturePtr> LoadedTextures;
-
-    auto it = LoadedTextures.find(path);
-    if (it == LoadedTextures.end()) {
-        string found = "Data/"+path;
-        TexturePtr texture = make_shared<Texture>(found);
-        LoadedTextures[path] = texture;
-        return texture;
-    }
-    return it->second;
-}
-ShaderPtr LoadShader(string path) {
-    return make_shared<Shader>(path);
-}
-
+TexturePtr LoadTexture(string path);
 
 class Model {
 public:
@@ -572,10 +543,10 @@ public:
             material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
             material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
             material->GetTexture(aiTextureType_HEIGHT, 0, &bumpMapPath);
-            diffuseMapPath = (diffuseMapPath.length==0)?aiString("textures/white.png"):diffuseMapPath;
-            specularMapPath = (specularMapPath.length==0)?aiString("textures/black.png"):specularMapPath;
-            normalMapPath = (normalMapPath.length==0)?aiString("textures/blankNormal.png"):normalMapPath;
-            bumpMapPath = (bumpMapPath.length==0)?aiString("textures/black.png"):bumpMapPath;
+            diffuseMapPath = (diffuseMapPath.length==0)?aiString("Data/textures/white.png"):diffuseMapPath;
+            specularMapPath = (specularMapPath.length==0)?aiString("Data/textures/black.png"):specularMapPath;
+            normalMapPath = (normalMapPath.length==0)?aiString("Data/textures/blankNormal.png"):normalMapPath;
+            bumpMapPath = (bumpMapPath.length==0)?aiString("Data/textures/black.png"):bumpMapPath;
             DiffuseTextures.push_back(LoadTexture(diffuseMapPath.C_Str()));
             SpecularTextures.push_back(LoadTexture(specularMapPath.C_Str()));
             NormalTextures.push_back(LoadTexture(normalMapPath.C_Str()));
@@ -584,18 +555,36 @@ public:
     }
 };
 
-typedef shared_ptr<Model> ModelPtr;
-
-ModelPtr LoadModel(string path) {
-    return make_shared<Model>(path);
-}
-
 class Light {
 public:
     vec3 Position;
     vec3 Color;
 };
 
+ModelPtr LoadModel(string path) {
+    return make_shared<Model>(path);
+}
+TexturePtr LoadTexture(string path) {
+    // Cache textures here so we don't load same texture many times over
+    static map<string, TexturePtr> LoadedTextures;
+
+    auto it = LoadedTextures.find(path);
+    if (it == LoadedTextures.end()) {
+        TexturePtr texture = make_shared<Texture>(path);
+        LoadedTextures[path] = texture;
+        return texture;
+    }
+    return it->second;
+}
+ShaderPtr LoadShader(string path) {
+    return make_shared<Shader>(path);
+}
+float RandomFloat() {
+    return rand() / (float)RAND_MAX;
+}
+float RandomFloat(float lo, float hi) {
+    return lo + RandomFloat() * (hi-lo);
+}
 
 class Main: public Engine {
     ModelPtr Sponza, Cube;
@@ -621,8 +610,8 @@ public:
         srand(time(0));
         Sponza = LoadModel("Data/models/sponza.obj");
         Cube = LoadModel("Data/models/cube.obj");
-        BasicShader = LoadShader("shaders/BasicShader.glsl");
-        LightCubeShader = LoadShader("shaders/LightCube.glsl");
+        BasicShader = LoadShader("Data/shaders/BasicShader.glsl");
+        LightCubeShader = LoadShader("Data/shaders/LightCube.glsl");
 
         Camera.SetPosition(vec3(0.0f, 0.0f, 2.0f));  
         CalculateViewport();
