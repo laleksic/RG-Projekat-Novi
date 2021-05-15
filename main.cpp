@@ -592,32 +592,22 @@ float RandomFloat(float lo, float hi) {
     return lo + RandomFloat() * (hi-lo);
 }
 
-ModelPtr Sponza, Cube;
-ShaderPtr BasicShader, LightCubeShader;
-FPSCamera Camera;
-mat4 ProjectionMatrix;
-vector<Light> Lights[2];
-float lightLerp = 0.0f;
-
-float ParallaxDepth = 0.04f;
-
-void CalculateViewportAndProjectionMatrix() {
-    ivec2 windowSize = TheEngine->GetWindowSize();
-    float aspectRatio = (float)windowSize.x / windowSize.y;
-    ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
-    glViewport(0,0, windowSize.x, windowSize.y);
-}
-
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
 
-    Sponza = Load<Model>("Data/models/sponza.obj");
-    Cube = Load<Model>("Data/models/cube.obj");
-    BasicShader = Load<Shader>("Data/shaders/BasicShader.glsl");
-    LightCubeShader = Load<Shader>("Data/shaders/LightCube.glsl");
+    // Load resources
+    // ------
+    ModelPtr Sponza = Load<Model>("Data/models/sponza.obj");
+    ModelPtr Cube = Load<Model>("Data/models/cube.obj");
+    ShaderPtr BasicShader = Load<Shader>("Data/shaders/BasicShader.glsl");
+    ShaderPtr LightCubeShader = Load<Shader>("Data/shaders/LightCube.glsl");
+    
+    // -- Setup scene
+    vector<Light> Lights[2];
+    float lightLerp = 0.0f;
+    FPSCamera camera;
 
-    Camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
-    CalculateViewportAndProjectionMatrix();
+    camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
 
     const int LIGHT_COUNT = 32;
     for (int j=0; j<2; ++j) {
@@ -637,33 +627,38 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Setup shaders --
+    BasicShader->SetUniform("DiffuseTexture", 0);  
+    BasicShader->SetUniform("SpecularTexture", 1);  
+    BasicShader->SetUniform("NormalTexture", 2);  
+    BasicShader->SetUniform("BumpTexture", 3);      
+
     while (TheEngine->Run()) {
-        if (TheEngine->WasWindowResized()) {
-            CalculateViewportAndProjectionMatrix();
-        }
+        // Update non-gpu stuff
+        // ---------
+        camera.Update();
 
-        Camera.Update();
+        // Calculate stuff we'll need
+        // ----
+        ivec2 windowSize = TheEngine->GetWindowSize();
+        float aspectRatio = (float)windowSize.x / windowSize.y;
+        
+        mat4 modelMat = scale(vec3(0.01f));
+        mat4 projectionMat = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
+        mat4 vpMat = projectionMat * camera.GetViewMatrix();
+        mat4 mvpMat = vpMat * modelMat;
 
-        mat4 modelMatrix = scale(vec3(0.01f));
-        mat4 viewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
-        mat4 modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
-        BasicShader->SetUniform("MVPMat", modelViewProjectionMatrix);
-        BasicShader->SetUniform("ModelMat", modelMatrix);
-        BasicShader->SetUniform("CameraPosition", Camera.GetPosition());
+        // Update per-frame uniforms
+        // ----------------
+        BasicShader->SetUniform("MVPMat", mvpMat);
+        BasicShader->SetUniform("ModelMat", modelMat);
+        BasicShader->SetUniform("CameraPosition", camera.GetPosition());
 
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-
-        ImGui::DragFloat("ParallaxDepth",&ParallaxDepth,
+        static float parallaxDepth = 0.04f;
+        ImGui::DragFloat("Parallax depth",&parallaxDepth,
             0.01f, 0, 0.2f, "%f", 1.0f);     
-        BasicShader->SetUniform("ParallaxDepth", ParallaxDepth);
+        BasicShader->SetUniform("ParallaxDepth", parallaxDepth);
 
-        BasicShader->Use( );
-        BasicShader->SetUniform("DiffuseTexture", 0);  
-        BasicShader->SetUniform("SpecularTexture", 1);  
-        BasicShader->SetUniform("NormalTexture", 2);  
-        BasicShader->SetUniform("BumpTexture", 3);  
         for (int i=0; i<Lights[0].size(); ++i) {
             vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
             vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
@@ -673,6 +668,15 @@ int main(int argc, char** argv) {
         BasicShader->SetUniform("AmbientLight", vec3(0.075,0.075,0.125));
         lightLerp = (sin(glfwGetTime())+1.0)/2.0;
 
+        //===
+        glViewport(0,0, windowSize.x, windowSize.y);
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+
+        // Render standard scene
+        // ----------------------
+        BasicShader->Use( );
         for (int i=0; i<Sponza->Meshes.size(); ++i) {
             if (Sponza->Materials[i].Translucent) {
                 glDisable(GL_CULL_FACE);
@@ -689,14 +693,16 @@ int main(int argc, char** argv) {
             Sponza->Meshes[i]->Draw();
         }
 
+        // Render lights as cubes
+        // ----------------------
         LightCubeShader->Use();
         for (int i=0; i<Lights[0].size(); ++i) {
             vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
             vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
-            modelMatrix = translate(lightPosition) * scale(vec3(0.125f));
-            modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
-            LightCubeShader->SetUniform("MVPMat", modelViewProjectionMatrix);
-            LightCubeShader->SetUniform("ModelMat", modelMatrix);
+            modelMat = translate(lightPosition) * scale(vec3(0.125f));
+            mvpMat = vpMat * modelMat;
+            LightCubeShader->SetUniform("MVPMat", mvpMat);
+            LightCubeShader->SetUniform("ModelMat", modelMat);
             LightCubeShader->SetUniform("LightColor", lightColor);
             for (int j=0; j<Cube->Meshes.size(); ++j) {
                 Cube->Meshes[j]->Draw();
