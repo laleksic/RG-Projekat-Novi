@@ -276,6 +276,12 @@ class Mesh {
     GLuint ElementBuffer;
     GLsizei ElementCount;
 
+    static GLuint BoundVertexArray;
+    void Bind() {
+        if (BoundVertexArray != VertexArray)
+            glBindVertexArray(VertexArray);
+        BoundVertexArray = VertexArray;
+    }
 public:
     vector<vec3> Positions;
     vector<vec3> Colors;
@@ -360,13 +366,14 @@ public:
         
         glNamedBufferData(ElementBuffer, ElementCount * sizeof(GLuint), Elements.data(), GL_STATIC_DRAW);
     }
-    void Bind() {
-        glBindVertexArray(VertexArray);
-    }
+
     void Draw() {
+        Bind();
         glDrawElements(GL_TRIANGLES, ElementCount, GL_UNSIGNED_INT, 0);
     }    
 };
+
+GLuint Mesh::BoundVertexArray = 0;
 
 template<class Resource>
 shared_ptr<Resource> Load(string path) {
@@ -398,7 +405,7 @@ public:
 
 class Shader {
     GLuint Program = 0;
-    static GLuint ActiveProgram = 0;
+    static GLuint ActiveProgram;
 
 public:
     Shader(string path) {
@@ -499,6 +506,7 @@ public:
     }
 };
 
+GLuint Shader::ActiveProgram = 0;
 
 class Model {
 public:
@@ -678,7 +686,6 @@ int main(int argc, char** argv) {
             Sponza->Materials[i].SpecularMap->Bind(1);
             Sponza->Materials[i].NormalMap->Bind(2);
             Sponza->Materials[i].BumpMap->Bind(3);
-            Sponza->Meshes[i]->Bind();
             Sponza->Meshes[i]->Draw();
         }
 
@@ -692,7 +699,6 @@ int main(int argc, char** argv) {
             LightCubeShader->SetUniform("ModelMat", modelMatrix);
             LightCubeShader->SetUniform("LightColor", lightColor);
             for (int j=0; j<Cube->Meshes.size(); ++j) {
-                Cube->Meshes[j]->Bind();
                 Cube->Meshes[j]->Draw();
             }  
         }
