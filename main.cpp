@@ -483,18 +483,12 @@ public:
     }
 };
 
-class RandomNumberGenerator {
-public:
-    RandomNumberGenerator() {
-        srand(time(0));
-    }
-    float RandomFloat() {
-        return rand() / (float)RAND_MAX;
-    }
-    float RandomFloat(float lo, float hi) {
-        return lo + RandomFloat() * (hi-lo);
-    }
-};
+float RandomFloat() {
+    return rand() / (float)RAND_MAX;
+}
+float RandomFloat(float lo, float hi) {
+    return lo + RandomFloat() * (hi-lo);
+}
 
 class TextureLoader {
     map<string, TexturePtr> LoadedTextures;
@@ -502,7 +496,7 @@ public:
     TexturePtr Load(string path) {
         auto it = LoadedTextures.find(path);
         if (it == LoadedTextures.end()) {
-            string found = string("Data/")+path;
+            string found = "Data/"+path;
             TexturePtr texture = make_shared<Texture>(found);
             LoadedTextures[path] = texture;
             return texture;
@@ -539,7 +533,7 @@ public:
         }
         for (int i=0; i<scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
-            
+
             assert(mesh->HasNormals());
             assert(mesh->HasPositions());
             assert(mesh->HasTextureCoords(0));
@@ -604,7 +598,6 @@ class Main: public Engine {
     int Argc;
     char **Argv;
     TextureLoaderPtr TexLoader;
-    RandomNumberGenerator RNG;
     vector<Light> Lights[2];
     float lightLerp = 0.0f;
 
@@ -619,6 +612,7 @@ class Main: public Engine {
 
 public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
+        srand(time(0));
         TexLoader = make_shared<TextureLoader>();
         Sponza = make_shared<Model>("Data/models/sponza.obj", TexLoader);
         Cube = make_shared<Model>("Data/models/cube.obj", TexLoader);
@@ -633,14 +627,14 @@ public:
         for (int i=0; i<LIGHT_COUNT; ++i) {
             Light light;
             light.Position = vec3(
-                RNG.RandomFloat(-7.5, 7.5),
-                RNG.RandomFloat(0, 7.5),
-                RNG.RandomFloat(-15, 5)
+                RandomFloat(-7.5, 7.5),
+                RandomFloat(0, 7.5),
+                RandomFloat(-15, 5)
             );
             light.Color = vec3(
-                RNG.RandomFloat(),
-                RNG.RandomFloat(),
-                RNG.RandomFloat()
+                RandomFloat(),
+                RandomFloat(),
+                RandomFloat()
             );
             Lights[j].push_back(light);
         }
