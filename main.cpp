@@ -1,6 +1,147 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "main.hpp"
 
+class Engine {
+    GLFWwindow *Window;
+    ImGuiContext *Gui;
+    bool FirstFrame = true;
+
+    // Input handling
+    // --------------
+    struct {
+        array<bool, GLFW_KEY_LAST+1> KeyDown = {false};
+        array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown = {false};  
+        vec2 MousePosition = vec2(0.0f);  
+        ivec2 WindowSize = ivec2(0,0);
+    } ThisFrame, LastFrame;
+
+    void Begin() {
+        LastFrame = ThisFrame;
+        glfwPollEvents(); 
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();            
+        ImGui::Begin("RG-Projekat");
+    }
+    void End() {
+        ImGui::End();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(Window);
+    }
+public:
+    Engine() {
+        // Init glfw/gl
+        // ------------
+        glfwSetErrorCallback([](int code, const char *msg){
+            cerr << "GLFW error (" << code << ")" << msg << endl;
+            abort();
+        });
+        glfwInit();
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+        Window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
+
+        glfwMakeContextCurrent(Window);
+        gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
+            GLenum severity, GLsizei length, const GLchar *message,
+            const void *userParam) {
+                if (type == GL_DEBUG_TYPE_ERROR) {
+                    cerr << "GL error: " << message << endl;
+                    abort();
+                }
+        }, 0);
+
+        glfwSetKeyCallback(Window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
+            switch (action) {
+                case GLFW_PRESS: TheEngine->ThisFrame.KeyDown.at(key) = true; break;
+                case GLFW_RELEASE: TheEngine->ThisFrame.KeyDown.at(key) = false; break;
+            }
+        });
+        glfwSetMouseButtonCallback(Window, [](GLFWwindow *window, int button, int action, int mods){
+            switch (action) {
+                case GLFW_PRESS: TheEngine->ThisFrame.ButtonDown.at(button) = true; break;
+                case GLFW_RELEASE: TheEngine->ThisFrame.ButtonDown.at(button) = false; break;            
+            }
+        });
+        glfwSetCursorPosCallback(Window, [](GLFWwindow *window, double xpos, double ypos){
+            TheEngine->ThisFrame.MousePosition = vec2(xpos, ypos);
+        });
+        glfwSetWindowSizeCallback(Window, [](GLFWwindow *window, int width, int height){
+            TheEngine->ThisFrame.WindowSize = ivec2(width, height);
+        });   
+
+        int w, h;
+        glfwGetWindowSize(Window, &w, &h);
+        ThisFrame.WindowSize = ivec2(w, h);     
+
+        // https://blog.conan.io/2019/06/26/An-introduction-to-the-Dear-ImGui-library.html
+        // Init imgui
+        // ----------
+        IMGUI_CHECKVERSION();
+        Gui = ImGui::CreateContext();
+        ImGui_ImplGlfw_InitForOpenGL(Window, true);
+        ImGui_ImplOpenGL3_Init("#version 450 core");
+        ImGui::StyleColorsDark();          
+    }
+    ~Engine() {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext(Gui);
+        glfwDestroyWindow(Window);
+        glfwTerminate();
+    }
+    bool Run() {
+        if (!FirstFrame)
+            End();
+        FirstFrame = false;
+        Begin();
+        if (glfwWindowShouldClose(Window)) {
+            End();
+            return false;
+        }
+        return true;
+    }
+    vec2 GetMousePosition() const {
+        return ThisFrame.MousePosition;
+    }
+    vec2 GetMouseDelta() const {
+        return ThisFrame.MousePosition - LastFrame.MousePosition;
+    }
+    bool IsKeyDown(int key) const {
+        return ThisFrame.KeyDown.at(key);
+    }
+    bool IsButtonDown(int button) const {
+        return ThisFrame.ButtonDown.at(button);
+    }
+    bool WasKeyPressed(int key) const {
+        return ThisFrame.KeyDown.at(key) && !LastFrame.KeyDown.at(key);
+    }
+    bool WasKeyReleased(int key) const {
+        return !ThisFrame.KeyDown.at(key) && LastFrame.KeyDown.at(key);
+    }
+    bool WasButtonPressed(int button) const {
+        return ThisFrame.ButtonDown.at(button) && !LastFrame.ButtonDown.at(button);
+    }
+    bool WasButtonReleased(int button) const {
+        return !ThisFrame.ButtonDown.at(button) && LastFrame.ButtonDown.at(button);
+    }
+    bool WasWindowResized() const {
+        return ThisFrame.WindowSize != LastFrame.WindowSize;
+    }
+    ivec2 GetWindowSize() const {
+        return ThisFrame.WindowSize;
+    }
+};
+
 class Camera {
     // Pitch/Yaw are in degrees
     float Pitch = 0.0f;
@@ -49,102 +190,12 @@ public:
     }
 };
 
-class InputMaster {
-    struct {
-        array<bool, GLFW_KEY_LAST+1> KeyDown = {false};
-        array<bool, GLFW_MOUSE_BUTTON_LAST+1> ButtonDown = {false};  
-        vec2 MousePosition = vec2(0.0f);  
-        ivec2 WindowSize = ivec2(0,0);
-    } ThisFrame, LastFrame;
-
-    void OnKey(int key, int scancode, int action, int mods) {
-        switch (action) {
-            case GLFW_PRESS: ThisFrame.KeyDown.at(key) = true; break;
-            case GLFW_RELEASE: ThisFrame.KeyDown.at(key) = false; break;
-        }
-    }
-    void OnMouseButton(int button, int action, int mods) {
-        switch (action) {
-            case GLFW_PRESS: ThisFrame.ButtonDown.at(button) = true; break;
-            case GLFW_RELEASE: ThisFrame.ButtonDown.at(button) = false; break;            
-        }
-    }
-    void OnCursorPos(double xpos, double ypos) {
-        ThisFrame.MousePosition = vec2(xpos, ypos);
-    }
-    void OnWindowSize(int width, int height) {
-        ThisFrame.WindowSize = ivec2(width, height);
-    }    
-public:
-    InputMaster(GLFWwindow *window) {
-        glfwSetWindowUserPointer(window, this);
-        glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods){
-            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-            input->OnKey(key, scancode, action, mods);
-        });
-        glfwSetMouseButtonCallback(window, [](GLFWwindow *window, int button, int action, int mods){
-            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-            input->OnMouseButton(button, action, mods);
-        });
-        glfwSetCursorPosCallback(window, [](GLFWwindow *window, double xpos, double ypos){
-            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-            input->OnCursorPos(xpos, ypos);
-        });
-        glfwSetWindowSizeCallback(window, [](GLFWwindow *window, int width, int height){
-            InputMaster *input = static_cast<InputMaster*>(glfwGetWindowUserPointer(window));
-            input->OnWindowSize(width, height);
-        });   
-
-        int w, h;
-        glfwGetWindowSize(window, &w, &h);
-        OnWindowSize(w, h);     
-    }
-    void NewFrame() {
-        LastFrame = ThisFrame;
-        glfwPollEvents();
-    }
-    vec2 GetMousePosition() const {
-        return ThisFrame.MousePosition;
-    }
-    vec2 GetMouseDelta() const {
-        return ThisFrame.MousePosition - LastFrame.MousePosition;
-    }
-    bool IsKeyDown(int key) const {
-        return ThisFrame.KeyDown.at(key);
-    }
-    bool IsButtonDown(int button) const {
-        return ThisFrame.ButtonDown.at(button);
-    }
-    bool WasKeyPressed(int key) const {
-        return ThisFrame.KeyDown.at(key) && !LastFrame.KeyDown.at(key);
-    }
-    bool WasKeyReleased(int key) const {
-        return !ThisFrame.KeyDown.at(key) && LastFrame.KeyDown.at(key);
-    }
-    bool WasButtonPressed(int button) const {
-        return ThisFrame.ButtonDown.at(button) && !LastFrame.ButtonDown.at(button);
-    }
-    bool WasButtonReleased(int button) const {
-        return !ThisFrame.ButtonDown.at(button) && LastFrame.ButtonDown.at(button);
-    }
-    bool WasWindowResized() const {
-        return ThisFrame.WindowSize != LastFrame.WindowSize;
-    }
-    ivec2 GetWindowSize() const {
-        return ThisFrame.WindowSize;
-    }
-};
-
-
 class FPSCamera: public Camera {
-    InputMasterPtr Input;
-
 public:
-    FPSCamera(InputMasterPtr input): Input(input) {}
     void Update() {
         // Mouselook
-        if (Input->IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-            vec2 mouseDelta = Input->GetMouseDelta();
+        if (TheEngine->IsButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
+            vec2 mouseDelta = TheEngine->GetMouseDelta();
             const float MOUSE_SENSITIVITY = 0.1f;
             SetYaw(GetYaw() - mouseDelta.x * MOUSE_SENSITIVITY);
             SetPitch(GetPitch() - mouseDelta.y * MOUSE_SENSITIVITY);
@@ -155,90 +206,13 @@ public:
         vec3 forward = GetDirection();
         vec3 right = rotateY(vec3(forward.x, 0.0f, forward.z), radians(-90.0f));
         vec3 wishDirection(0.0f, 0.0f, 0.0f);
-        wishDirection += (Input->IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
-        wishDirection += (Input->IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
-        wishDirection += (Input->IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
-        wishDirection += (Input->IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
+        wishDirection += (TheEngine->IsKeyDown(GLFW_KEY_W)?1.0f:0.0f) * forward;
+        wishDirection += (TheEngine->IsKeyDown(GLFW_KEY_S)?-1.0f:0.0f) * forward;
+        wishDirection += (TheEngine->IsKeyDown(GLFW_KEY_A)?-1.0f:0.0f) * right;
+        wishDirection += (TheEngine->IsKeyDown(GLFW_KEY_D)?1.0f:0.0f) * right;
         if (length(wishDirection) > 0.001f)
             wishDirection = normalize(wishDirection);
         SetPosition(GetPosition() + wishDirection * MOVEMENT_SPEED);
-    }
-};
-
-class Engine {
-    GLFWwindow *Window;
-    ImGuiContext *Gui;
-    bool FirstFrame = true;
-
-    void Begin() {
-        Input->NewFrame();  
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();            
-        ImGui::Begin("RG-Projekat");
-    }
-    void End() {
-        ImGui::End();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glfwSwapBuffers(Window);
-    }
-public:
-    InputMasterPtr Input;
-    Engine() {
-        glfwSetErrorCallback([](int code, const char *msg){
-            cerr << "GLFW error (" << code << ")" << msg << endl;
-            abort();
-        });
-        glfwInit();
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-        glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-        Window = glfwCreateWindow(640, 480, "RG-Projekat", 0, 0);
-        Input = make_shared<InputMaster>(Window);
-
-        glfwMakeContextCurrent(Window);
-        gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-        glEnable(GL_DEBUG_OUTPUT);
-        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-        glDebugMessageCallback([](GLenum source, GLenum type, GLuint id,
-            GLenum severity, GLsizei length, const GLchar *message,
-            const void *userParam) {
-                if (type == GL_DEBUG_TYPE_ERROR) {
-                    cerr << "GL error: " << message << endl;
-                    abort();
-                }
-        }, 0);
-
-        // https://blog.conan.io/2019/06/26/An-introduction-to-the-Dear-ImGui-library.html
-        // Setup Dear ImGui context
-        IMGUI_CHECKVERSION();
-        Gui = ImGui::CreateContext();
-        ImGui_ImplGlfw_InitForOpenGL(Window, true);
-        ImGui_ImplOpenGL3_Init("#version 450 core");
-        ImGui::StyleColorsDark();        
-    }
-    ~Engine() {
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext(Gui);
-        glfwDestroyWindow(Window);
-        glfwTerminate();
-    }
-    bool Run() {
-        if (!FirstFrame)
-            End();
-        FirstFrame = false;
-        Begin();
-        if (glfwWindowShouldClose(Window)) {
-            End();
-            return false;
-        }
-        return true;
     }
 };
 
@@ -588,24 +562,22 @@ float RandomFloat(float lo, float hi) {
 
 ModelPtr Sponza, Cube;
 ShaderPtr BasicShader, LightCubeShader;
-FPSCameraPtr Camera;
+FPSCamera Camera;
 mat4 ProjectionMatrix;
 vector<Light> Lights[2];
 float lightLerp = 0.0f;
 
 float ParallaxDepth = 0.04f;
 
-void CalculateViewport(InputMasterPtr input) {
-    ivec2 windowSize = input->GetWindowSize();
+void CalculateViewport() {
+    ivec2 windowSize = TheEngine->GetWindowSize();
     float aspectRatio = (float)windowSize.x / windowSize.y;
     ProjectionMatrix = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
     glViewport(0,0, windowSize.x, windowSize.y);
 }
 
 int main(int argc, char** argv) {
-    Engine engine;
-
-    Camera = make_shared<FPSCamera>(engine.Input);
+    TheEngine = make_shared<Engine>();
 
     srand(time(0));
     Sponza = LoadModel("Data/models/sponza.obj");
@@ -613,8 +585,8 @@ int main(int argc, char** argv) {
     BasicShader = LoadShader("Data/shaders/BasicShader.glsl");
     LightCubeShader = LoadShader("Data/shaders/LightCube.glsl");
 
-    Camera->SetPosition(vec3(0.0f, 2.0f, 2.0f));  
-    CalculateViewport(engine.Input);
+    Camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
+    CalculateViewport();
 
     const int LIGHT_COUNT = 32;
     for (int j=0; j<2; ++j) {
@@ -634,19 +606,19 @@ int main(int argc, char** argv) {
         }
     }
 
-    while (engine.Run()) {
-        if (engine.Input->WasWindowResized()) {
-            CalculateViewport(engine.Input);
+    while (TheEngine->Run()) {
+        if (TheEngine->WasWindowResized()) {
+            CalculateViewport();
         }
 
-        Camera->Update();
+        Camera.Update();
 
         mat4 modelMatrix = scale(vec3(0.01f));
-        mat4 viewProjectionMatrix = ProjectionMatrix * Camera->GetViewMatrix();
+        mat4 viewProjectionMatrix = ProjectionMatrix * Camera.GetViewMatrix();
         mat4 modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix;
         BasicShader->SetUniform("MVPMat", modelViewProjectionMatrix);
         BasicShader->SetUniform("ModelMat", modelMatrix);
-        BasicShader->SetUniform("CameraPosition", Camera->GetPosition());
+        BasicShader->SetUniform("CameraPosition", Camera.GetPosition());
 
         glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -26,14 +26,15 @@ using namespace glm;
 using namespace std;
 
 class Texture;
-class InputMaster;
 class Model;
 class Mesh;
 class Shader;
 class FPSCamera;
+class Engine;
 typedef shared_ptr<Texture> TexturePtr;
-typedef shared_ptr<InputMaster> InputMasterPtr;
 typedef shared_ptr<Model> ModelPtr;
 typedef shared_ptr<Mesh> MeshPtr;
 typedef shared_ptr<Shader> ShaderPtr;
 typedef shared_ptr<FPSCamera> FPSCameraPtr;
+typedef shared_ptr<Engine> EnginePtr;
+EnginePtr TheEngine;
