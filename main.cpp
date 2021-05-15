@@ -15,6 +15,8 @@ class Engine {
         ivec2 WindowSize = ivec2(0,0);
     } ThisFrame, LastFrame;
 
+    // Frame begin/end
+    // ---------------
     void Begin() {
         LastFrame = ThisFrame;
         glfwPollEvents(); 
