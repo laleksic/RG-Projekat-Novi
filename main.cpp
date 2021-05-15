@@ -666,7 +666,6 @@ public:
     Main(int argc, char **argv): Argc(argc), Argv(argv), Camera(Input) {
         IO = make_shared<IOUtils>(GetExecutablePath());
         TexLoader = make_shared<TextureLoader>(IO);
-        // Sponza = make_shared<Model>(IO->FindDataFile("Sponza.gltf"), IO);
         Sponza = make_shared<Model>(IO->FindDataFile("models/sponza.obj"), TexLoader);
         Cube = make_shared<Model>(IO->FindDataFile("models/cube.obj"), TexLoader);
         BasicShader = make_shared<Shader>(IO->LoadDataFileAsString("shaders/BasicShader.glsl"));
