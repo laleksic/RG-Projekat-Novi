@@ -167,6 +167,7 @@ public:
 
 class Engine {
     GLFWwindow *Window;
+    ImGuiContext *Gui;
 
 public:
     InputMasterPtr Input;
@@ -200,15 +201,15 @@ public:
         // https://blog.conan.io/2019/06/26/An-introduction-to-the-Dear-ImGui-library.html
         // Setup Dear ImGui context
         IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGuiIO &io = ImGui::GetIO();
-        // Setup Platform/Renderer bindings
+        Gui = ImGui::CreateContext();
         ImGui_ImplGlfw_InitForOpenGL(Window, true);
         ImGui_ImplOpenGL3_Init("#version 450 core");
-        // Setup Dear ImGui style
         ImGui::StyleColorsDark();        
     }
     ~Engine() {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext(Gui);
         glfwDestroyWindow(Window);
         glfwTerminate();
     }
