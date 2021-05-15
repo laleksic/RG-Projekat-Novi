@@ -478,18 +478,6 @@ public:
 class IOUtils {
     fs::path ExecutablePath;
 
-    bool TryFindDataFile(fs::path searchRoot, string fileName, fs::path& outPath) const {
-        for (auto& entry: fs::directory_iterator(searchRoot)) {
-            if (entry.is_regular_file() && entry.path().filename() == fileName) {
-                outPath = entry.path();
-                return true;
-            }
-            if (entry.is_directory() && TryFindDataFile(entry.path(), fileName, outPath)) {
-                return true;
-            }
-        }
-        return false;
-    }    
 public:
     IOUtils(fs::path executablePath): ExecutablePath(executablePath) {}
     fs::path GetExecutablePath() const {
@@ -499,15 +487,6 @@ public:
         return GetExecutablePath()/"Data";
     }
     fs::path FindDataFile(fs::path fileName) const {
-        /*
-        fileName = fs::path(fileName).filename().string();
-        fs::path outPath;
-        if (!TryFindDataFile(GetDataPath(), fileName, outPath)) {
-            fprintf(stderr, "Can't open data file %s\n", fileName.c_str());
-            abort();
-        }
-        return outPath;
-        */
         fs::path fullPath = GetDataPath()/fileName;
         if (fs::exists(fullPath)) {
             return fullPath;
@@ -575,19 +554,13 @@ public:
 
     Model(fs::path path, TextureLoaderPtr textureLoader) {
         Assimp::Importer importer;
-        //AssimpReadOnlyIOSystem ioHandler(IO);
-        //importer.SetIOHandler(&ioHandler);
         string pathString = path.string();
         unsigned flags = 0;
         flags |= aiProcess_Triangulate;
         flags |= aiProcess_PreTransformVertices;
         flags |= aiProcess_FlipUVs;
-        // flags |= aiProcess_CalcTangentSpace;
-        //flags |= aiProcess_GenNormals;
-        // flags |= aiProcess_ForceGenNormals;
         flags |= aiProcess_FixInfacingNormals;
         flags |= aiProcess_FindInvalidData;
-        // flags |= aiProcess_GenUVCoords;
         const aiScene *scene = importer.ReadFile(pathString.c_str(), flags);
         scene = importer.ApplyPostProcessing(aiProcess_GenNormals | aiProcess_CalcTangentSpace);
         if (!scene) {
