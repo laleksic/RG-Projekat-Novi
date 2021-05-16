@@ -6,6 +6,13 @@ struct Light {
     vec3 Color;
 };
 
+// Inherits from Camera so I don't repeat the direction/view matrix stuff..
+//- -- --
+struct Spotlight: public Camera{ 
+    vec3 Color;
+    float CutoffAng;
+};
+
 class DeferredRenderer {
 public:
     enum Buffer {
@@ -44,6 +51,7 @@ public:
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
     const int MAX_LIGHTS = 100; // Keep in sync with shader!
+    Spotlight Flashlight;
 
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
@@ -129,6 +137,10 @@ public:
             LightingStage->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
             LightingStage->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
         }
+        LightingStage->SetUniform("FlashlightPosition", Flashlight.GetPosition());
+        LightingStage->SetUniform("FlashlightDirection", Flashlight.GetDirection());
+        LightingStage->SetUniform("FlashlightColor", Flashlight.Color);
+        LightingStage->SetUniform("FlashlightCutoffAng", Flashlight.CutoffAng);
         LightingStage->SetUniform("CameraPosition", camera.GetPosition());
         LightingStage->SetUniform("Gamma", Gamma);
     }
@@ -202,10 +214,16 @@ void RandomizeLights(DeferredRenderer& rend, int lightCount){
 
 void AnimateLights(DeferredRenderer& rend) {
     for (Light& l: rend.Lights) {
-        l.Position.y += sin(glfwGetTime()+l.Color.r)*0.1;
-        l.Position.x += sin(glfwGetTime()+l.Color.g)*0.1;
-        l.Position.z += sin(glfwGetTime()+l.Color.b)*0.1;
+        l.Position.y += sin(glfwGetTime()+l.Color.r)*0.06;
+        l.Position.x += sin(glfwGetTime()+l.Color.g)*0.06;
+        l.Position.z += sin(glfwGetTime()+l.Color.b)*0.06;
     }
+}
+
+void SyncFlashlightToCamera(DeferredRenderer& rend, Camera& cam) {
+    rend.Flashlight.SetPosition( cam.GetPosition() );
+    rend.Flashlight.SetPitch( cam.GetPitch());
+    rend.Flashlight.SetYaw( cam.GetYaw());
 }
 
 int main(int argc, char** argv) {
@@ -216,6 +234,8 @@ int main(int argc, char** argv) {
     FPSCamera camera;
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
     RandomizeLights(drenderer, 16);
+    drenderer.Flashlight.CutoffAng = radians(45.0f);
+    drenderer.Flashlight.Color = vec3(3,3,3);
 
     camera.Update();
     drenderer.Update(camera); // This has to be called before main loop!!
@@ -249,6 +269,13 @@ int main(int argc, char** argv) {
         ImGui::Checkbox("Animate lights", &animateLights);
         if (animateLights)
             AnimateLights(drenderer);
+        static bool syncFlashlightToCamera = true;
+        ImGui::Checkbox("Sync flashlight to camera", &syncFlashlightToCamera);
+        if (syncFlashlightToCamera)
+            SyncFlashlightToCamera(drenderer, camera);
+        ImGui::SliderAngle("Flashlight cutoff angle", &drenderer.Flashlight.CutoffAng,
+            0.0f, 60.0f);
+        ImGui::ColorEdit3("Flashlight color", value_ptr(drenderer.Flashlight.Color));
         
         camera.Update();
         drenderer.Update(camera);

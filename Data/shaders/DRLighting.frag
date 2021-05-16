@@ -17,6 +17,10 @@ struct Light {
 uniform Light Lights[MAX_LIGHTS];
 uniform int LightCount;
 uniform vec3 AmbientLight;
+uniform vec3 FlashlightPosition;
+uniform vec3 FlashlightDirection;
+uniform vec3 FlashlightColor;
+uniform float FlashlightCutoffAng;
 uniform sampler2D GBuffer[BufferCount];
 uniform int VisualizeBuffer;
 uniform vec3 CameraPosition;
@@ -58,6 +62,7 @@ void main() {
     // (A global ambient light)
     Color.rgb += AmbientLight.rgb * diffuse;
 
+    // Point lights
     for (int i=0; i<LightCount; ++i) {
         vec3 wsLightPosition = Lights[i].Position;
         vec3 lightColor = Lights[i].Color;
@@ -78,6 +83,33 @@ void main() {
         float align = max(0, dot(halfway, wsNormal));
         float shininess = pow(align, 32);
         Color.rgb += specular * lightColor * shininess * attenuation;
+    }
+
+    // // The flashlight 
+    // // I'll be repeating some code here which I should refactor into functions..
+    {
+        vec3 wsToLight = FlashlightPosition - wsPosition;
+        vec3 lightColor = FlashlightColor;
+        float distanceToLight = length(wsToLight);
+        wsToLight = normalize(wsToLight);
+    
+        float attenuation = AttenuateLight(distanceToLight);
+        float cutoffFactor = max(0, dot(normalize(FlashlightDirection), -wsToLight));
+        if (cutoffFactor < cos(FlashlightCutoffAng)){
+            cutoffFactor = 0;
+        }
+
+        // Diffuse
+        float lambert = max(0, dot(wsToLight, wsNormal));
+        Color.rgb += diffuse * lightColor * lambert * attenuation * cutoffFactor;
+        float lambertBack = max(0, dot(wsToLight, -wsNormal));
+        Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency * cutoffFactor;
+
+        // Specular
+        vec3 halfway = normalize(wsToLight + wsToCamera);
+        float align = max(0, dot(halfway, wsNormal));
+        float shininess = pow(align, 32);
+        Color.rgb += specular * lightColor * shininess * attenuation * cutoffFactor;        
     }
 
     // Gamma correction
