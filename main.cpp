@@ -12,13 +12,13 @@ int main(int argc, char** argv) {
 
     // Load resources
     // ------
-    ModelPtr Sponza = Load<Model>("Data/models/sponza.obj");
-    ModelPtr Cube = Load<Model>("Data/models/cube.obj");
-    ShaderPtr BasicShader = Load<Shader>("Data/shaders/BasicShader.glsl");
-    ShaderPtr LightCubeShader = Load<Shader>("Data/shaders/LightCube.glsl");
+    ModelPtr sponza = Load<Model>("Data/models/sponza.obj");
+    ModelPtr cube = Load<Model>("Data/models/cube.obj");
+    ShaderPtr basicShader = Load<Shader>("Data/shaders/BasicShader.glsl");
+    ShaderPtr lightCubeShader = Load<Shader>("Data/shaders/LightCube.glsl");
     
     // -- Setup scene
-    vector<Light> Lights[2];
+    vector<Light> lights[2];
     float lightLerp = 0.0f;
     FPSCamera camera;
 
@@ -38,15 +38,15 @@ int main(int argc, char** argv) {
                 RandomFloat(),
                 RandomFloat()
             );
-            Lights[j].push_back(light);
+            lights[j].push_back(light);
         }
     }
 
     // Setup shaders --
-    BasicShader->SetUniform("DiffuseTexture", 0);  
-    BasicShader->SetUniform("SpecularTexture", 1);  
-    BasicShader->SetUniform("NormalTexture", 2);  
-    BasicShader->SetUniform("BumpTexture", 3);      
+    basicShader->SetUniform("DiffuseTexture", 0);  
+    basicShader->SetUniform("SpecularTexture", 1);  
+    basicShader->SetUniform("NormalTexture", 2);  
+    basicShader->SetUniform("BumpTexture", 3);      
 
     while (TheEngine->Run()) {
         // Update non-gpu stuff
@@ -65,22 +65,22 @@ int main(int argc, char** argv) {
 
         // Update per-frame uniforms
         // ----------------
-        BasicShader->SetUniform("MVPMat", mvpMat);
-        BasicShader->SetUniform("ModelMat", modelMat);
-        BasicShader->SetUniform("CameraPosition", camera.GetPosition());
+        basicShader->SetUniform("MVPMat", mvpMat);
+        basicShader->SetUniform("ModelMat", modelMat);
+        basicShader->SetUniform("CameraPosition", camera.GetPosition());
 
         static float parallaxDepth = 0.04f;
         ImGui::DragFloat("Parallax depth",&parallaxDepth,
             0.01f, 0, 0.2f, "%f", 1.0f);     
-        BasicShader->SetUniform("ParallaxDepth", parallaxDepth);
+        basicShader->SetUniform("ParallaxDepth", parallaxDepth);
 
-        for (int i=0; i<Lights[0].size(); ++i) {
-            vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
-            vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
-            BasicShader->SetUniform("Lights["+to_string(i)+"].Position", lightPosition);
-            BasicShader->SetUniform("Lights["+to_string(i)+"].Color", lightColor);
+        for (int i=0; i<lights[0].size(); ++i) {
+            vec3 lightPosition = lerp(lights[0][i].Position, lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
+            vec3 lightColor = lerp(lights[0][i].Color, lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
+            basicShader->SetUniform("Lights["+to_string(i)+"].Position", lightPosition);
+            basicShader->SetUniform("Lights["+to_string(i)+"].Color", lightColor);
         }
-        BasicShader->SetUniform("AmbientLight", vec3(0.075,0.075,0.125));
+        basicShader->SetUniform("AmbientLight", vec3(0.075,0.075,0.125));
         lightLerp = (sin(glfwGetTime())+1.0)/2.0;
 
         //===
@@ -91,36 +91,36 @@ int main(int argc, char** argv) {
 
         // Render standard scene
         // ----------------------
-        BasicShader->Use( );
-        for (int i=0; i<Sponza->Meshes.size(); ++i) {
-            if (Sponza->Materials[i].Translucent) {
+        basicShader->Use( );
+        for (int i=0; i<sponza->Meshes.size(); ++i) {
+            if (sponza->Materials[i].Translucent) {
                 glDisable(GL_CULL_FACE);
-                BasicShader->SetUniform("Translucent", true);
+                basicShader->SetUniform("Translucent", true);
             } else {
                 glEnable(GL_CULL_FACE);
                 glCullFace(GL_BACK);
-                BasicShader->SetUniform("Translucent", false);
+                basicShader->SetUniform("Translucent", false);
             }
-            Sponza->Materials[i].DiffuseMap->Bind(0);
-            Sponza->Materials[i].SpecularMap->Bind(1);
-            Sponza->Materials[i].NormalMap->Bind(2);
-            Sponza->Materials[i].BumpMap->Bind(3);
-            Sponza->Meshes[i]->Draw();
+            sponza->Materials[i].DiffuseMap->Bind(0);
+            sponza->Materials[i].SpecularMap->Bind(1);
+            sponza->Materials[i].NormalMap->Bind(2);
+            sponza->Materials[i].BumpMap->Bind(3);
+            sponza->Meshes[i]->Draw();
         }
 
         // Render lights as cubes
         // ----------------------
-        LightCubeShader->Use();
-        for (int i=0; i<Lights[0].size(); ++i) {
-            vec3 lightPosition = lerp(Lights[0][i].Position, Lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
-            vec3 lightColor = lerp(Lights[0][i].Color, Lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
+        lightCubeShader->Use();
+        for (int i=0; i<lights[0].size(); ++i) {
+            vec3 lightPosition = lerp(lights[0][i].Position, lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
+            vec3 lightColor = lerp(lights[0][i].Color, lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
             modelMat = translate(lightPosition) * scale(vec3(0.125f));
             mvpMat = vpMat * modelMat;
-            LightCubeShader->SetUniform("MVPMat", mvpMat);
-            LightCubeShader->SetUniform("ModelMat", modelMat);
-            LightCubeShader->SetUniform("LightColor", lightColor);
-            for (int j=0; j<Cube->Meshes.size(); ++j) {
-                Cube->Meshes[j]->Draw();
+            lightCubeShader->SetUniform("MVPMat", mvpMat);
+            lightCubeShader->SetUniform("ModelMat", modelMat);
+            lightCubeShader->SetUniform("LightColor", lightColor);
+            for (int j=0; j<cube->Meshes.size(); ++j) {
+                cube->Meshes[j]->Draw();
             }  
         }
     }
