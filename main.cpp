@@ -200,6 +200,14 @@ void RandomizeLights(DeferredRenderer& rend, int lightCount){
     }
 }
 
+void AnimateLights(DeferredRenderer& rend) {
+    for (Light& l: rend.Lights) {
+        l.Position.y += sin(glfwGetTime()+l.Color.r)*0.1;
+        l.Position.x += sin(glfwGetTime()+l.Color.g)*0.1;
+        l.Position.z += sin(glfwGetTime()+l.Color.b)*0.1;
+    }
+}
+
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
     DeferredRenderer drenderer;
@@ -240,6 +248,7 @@ int main(int argc, char** argv) {
         
         camera.Update();
         drenderer.Update(camera);
+        AnimateLights(drenderer);
 
         drenderer.BeginGeometryStage();
             drenderer.SetModelMatrix(scale(vec3(0.01f)));
