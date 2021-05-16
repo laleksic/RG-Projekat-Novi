@@ -29,9 +29,9 @@ in VertexData {
 out vec4 Color;
 
 float AttenuateLight(float distanceToLight) {
-    const float constant = 1.0f;
-    const float linear = 0.22f;//0.35f;
-    const float quadratic = 0.20f;//0.44f;
+    const float constant = 0.0f;//1.0f;
+    const float linear = 0.0f;//0.22f;//0.35f;
+    const float quadratic = 1.0f;//0.20f;//0.44f;
     return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
 }
 
