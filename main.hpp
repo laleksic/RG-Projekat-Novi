@@ -450,26 +450,34 @@ class Shader {
     GLuint Program = 0;
     static GLuint ActiveProgram;
 
-public:
-    Shader(string path) {
+    static string FileToString(string path) {
         string source;
         FILE *fp = fopen(path.c_str(), "r");
+        if (!fp) {
+            cerr << "failed to open " << path << endl;
+            abort();
+        }
         fseek(fp, 0, SEEK_END);
         source.resize(ftell(fp));
         rewind(fp);
         fread(&source[0], 1, source.size(), fp);
         fclose(fp);
+        return source;
+    }
 
+public:
+    Shader(string path) {
         GLuint vertexShader;
         GLuint fragmentShader;
-        // --  VS/FS are unified in one source file --
-        const char *vertexSources[] = {"#version 450 core\n", "#define VERTEX_SHADER\n", source.c_str()};
-        const char *fragmentSources[] = {"#version 450 core\n", "#define FRAGMENT_SHADER\n", source.c_str()};
+        string vertexSource = FileToString(path+".vert");
+        string fragmentSource = FileToString(path+".frag");
+        const char *vsCstr = vertexSource.c_str();
+        const char *fsCstr = fragmentSource.c_str();
         vertexShader = glCreateShader(GL_VERTEX_SHADER);
         fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
         Program = glCreateProgram();
-        glShaderSource(vertexShader, 3, vertexSources, 0);
-        glShaderSource(fragmentShader, 3, fragmentSources, 0);
+        glShaderSource(vertexShader, 1, &vsCstr, 0);
+        glShaderSource(fragmentShader, 1, &fsCstr, 0);
         glCompileShader(vertexShader);
         glCompileShader(fragmentShader);
         glAttachShader(Program, vertexShader);

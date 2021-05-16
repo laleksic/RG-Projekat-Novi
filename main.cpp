@@ -65,13 +65,13 @@ public:
             2,3,0
         };
         ScreenQuad.UploadToGPU();
-        GeometryStage = Load<Shader>("Data/shaders/DRGeometry.glsl");
+        GeometryStage = Load<Shader>("Data/shaders/DRGeometry");
         GeometryStage->SetUniform("DiffuseMap", 0);  
         GeometryStage->SetUniform("SpecularMap", 1);  
         GeometryStage->SetUniform("NormalMap", 2);  
         GeometryStage->SetUniform("BumpMap", 3);           
         GeometryStage->SetUniform("TranslucencyMap", 4);           
-        LightingStage = Load<Shader>("Data/shaders/DRLighting.glsl");
+        LightingStage = Load<Shader>("Data/shaders/DRLighting");
         for (int buf=0; buf<DepthBuf; ++buf) {
             LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
         }
