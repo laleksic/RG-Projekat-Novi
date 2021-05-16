@@ -122,8 +122,8 @@ public:
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
 
         LightingStage->SetUniform("AmbientLight", AmbientLight);
-        LightingStage->SetUniform("LightCount", std::max((int)Lights.size(), MAX_LIGHTS));
-        for (int i=0; i<Lights.size(); ++i) {
+        LightingStage->SetUniform("LightCount", std::min((int)Lights.size(), MAX_LIGHTS));
+        for (int i=0; i<std::min((int)Lights.size(),MAX_LIGHTS); ++i) {
             LightingStage->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
             LightingStage->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
         }
@@ -206,6 +206,9 @@ int main(int argc, char** argv) {
         TMP(DeferredRenderer::NormalBuf);
         TMP(DeferredRenderer::TranslucencyBuf);
         #undef TMP
+        if (ImGui::Button("Final render")) {
+            drenderer.VisualizeBuffer(-1);
+        }
         
         camera.Update();
         drenderer.Update(camera);

@@ -85,6 +85,9 @@ vec3 RGB2Normal(vec3 c){ return c*2-1;}
 
 void main() {
     vec2 texCoords = vertexData.TexCoords;
+    if (texture(DiffuseMap, texCoords).a < 0.5) {
+        discard;
+    }
     vec3 tsToCamera = normalize( vertexData.TSToCamera );
     ReliefParallaxMapping(tsToCamera, texCoords);
     PositionBuf = vertexData.WSPosition;
