@@ -20,6 +20,7 @@ uniform vec3 AmbientLight;
 uniform sampler2D GBuffer[BufferCount];
 uniform int VisualizeBuffer;
 uniform vec3 CameraPosition;
+uniform float Gamma;
 
 in VertexData {
     vec2 TexCoords;
@@ -33,6 +34,9 @@ float AttenuateLight(float distanceToLight) {
     const float quadratic = 0.20f;//0.44f;
     return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
 }
+
+vec3 Gamma_ToLinear(vec3 c) {return pow(c,vec3(Gamma));}
+vec3 Gamma_FromLinear(vec3 c) {return pow(c,vec3(1/Gamma));}
 
 void main() {
     Color.rgb = vec3(0);
@@ -75,4 +79,7 @@ void main() {
         float shininess = pow(align, 32);
         Color.rgb += specular * lightColor * shininess * attenuation;
     }
+
+    // Gamma correction
+    Color.rgb = Gamma_FromLinear( Color.rgb );
 }

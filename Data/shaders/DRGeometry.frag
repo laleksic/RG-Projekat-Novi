@@ -10,6 +10,7 @@ uniform sampler2D NormalMap;
 uniform sampler2D BumpMap;
 uniform sampler2D TranslucencyMap;
 uniform float ParallaxDepth;
+uniform float Gamma;
 
 in VertexData {
     vec2 TexCoords;
@@ -82,6 +83,8 @@ void ReliefParallaxMapping(
 
 vec3 Normal2RGB(vec3 n){ return (n+1)/2; }
 vec3 RGB2Normal(vec3 c){ return c*2-1;}
+vec3 Gamma_ToLinear(vec3 c) {return pow(c,vec3(Gamma));}
+vec3 Gamma_FromLinear(vec3 c) {return pow(c,vec3(1/Gamma));}
 
 void main() {
     vec2 texCoords = vertexData.TexCoords;
@@ -91,7 +94,7 @@ void main() {
     vec3 tsToCamera = normalize( vertexData.TSToCamera );
     ReliefParallaxMapping(tsToCamera, texCoords);
     PositionBuf = vertexData.WSPosition;
-    DiffuseBuf = texture(DiffuseMap, texCoords).rgb;
+    DiffuseBuf = Gamma_ToLinear( texture(DiffuseMap, texCoords).rgb );
     SpecularBuf = texture(SpecularMap, texCoords).rgb;
     NormalBuf = vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb);
     TranslucencyBuf = texture(TranslucencyMap, texCoords).rgb;

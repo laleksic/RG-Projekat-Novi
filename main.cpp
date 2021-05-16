@@ -40,6 +40,7 @@ private:
     }    
 public:
     float ParallaxDepth =0.04f;
+    float Gamma =2.2f;
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
     const int MAX_LIGHTS = 100; // Keep in sync with shader!
@@ -120,6 +121,7 @@ public:
         GeometryStage->SetUniform("CameraPosition", camera.GetPosition());
 
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
+        GeometryStage->SetUniform("Gamma", Gamma);
 
         LightingStage->SetUniform("AmbientLight", AmbientLight);
         LightingStage->SetUniform("LightCount", std::min((int)Lights.size(), MAX_LIGHTS));
@@ -128,6 +130,7 @@ public:
             LightingStage->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
         }
         LightingStage->SetUniform("CameraPosition", camera.GetPosition());
+        LightingStage->SetUniform("Gamma", Gamma);
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
@@ -200,7 +203,7 @@ void RandomizeLights(DeferredRenderer& rend, int lightCount){
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
     DeferredRenderer drenderer;
-    drenderer.AmbientLight = vec3(0.5);
+    drenderer.AmbientLight = vec3(0.05);
 
     FPSCamera camera;
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
@@ -234,6 +237,13 @@ int main(int argc, char** argv) {
             RandomizeLights(drenderer, lightCount);
         }
         ImGui::ColorEdit3("Ambient light", value_ptr(drenderer.AmbientLight));
+        static bool gammaCorrection = false;
+        ImGui::Checkbox("Gamma correction", &gammaCorrection);
+        if (gammaCorrection) {
+            drenderer.Gamma = 2.2f;
+        } else {
+            drenderer.Gamma = 1.0f;
+        }
         
         camera.Update();
         drenderer.Update(camera);
