@@ -42,7 +42,7 @@ public:
     float ParallaxDepth =0.04f;
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
-    const int MAX_LIGHTS = 32; // Keep in sync with shader!
+    const int MAX_LIGHTS = 100; // Keep in sync with shader!
 
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
@@ -127,6 +127,7 @@ public:
             LightingStage->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
             LightingStage->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
         }
+        LightingStage->SetUniform("CameraPosition", camera.GetPosition());
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
@@ -182,6 +183,20 @@ public:
     }
 };
 
+void RandomizeLights(DeferredRenderer& rend, int lightCount){
+    rend.Lights.clear();
+    for (int i=0; i<lightCount; ++i) {
+        Light l;
+        l.Position = vec3(
+                RandomFloat(-7.5, 7.5),
+                RandomFloat(0, 7.5),
+                RandomFloat(-15, 5)
+        );
+        l.Color = vec3(RandomFloat(), RandomFloat(), RandomFloat());
+        rend.Lights.push_back(l);
+    }
+}
+
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
     DeferredRenderer drenderer;
@@ -189,8 +204,12 @@ int main(int argc, char** argv) {
 
     FPSCamera camera;
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
+    RandomizeLights(drenderer, 16);
 
-    drenderer.Update(camera);
+    camera.Update();
+    drenderer.Update(camera); // This has to be called before main loop!!
+                              // otherwise fbo incomplete
+                              // maybe due to window size.
 
     ModelPtr sponza = Load<Model>("Data/models/sponza.obj");
 
@@ -209,11 +228,16 @@ int main(int argc, char** argv) {
         if (ImGui::Button("Final render")) {
             drenderer.VisualizeBuffer(-1);
         }
+        static int lightCount = 16;
+        ImGui::SliderInt("Light count", &lightCount, 0, drenderer.MAX_LIGHTS);
+        if (ImGui::Button("Randomize lights")) {
+            RandomizeLights(drenderer, lightCount);
+        }
+        ImGui::ColorEdit3("Ambient light", value_ptr(drenderer.AmbientLight));
         
         camera.Update();
         drenderer.Update(camera);
 
-        
         drenderer.BeginGeometryStage();
             drenderer.SetModelMatrix(scale(vec3(0.01f)));
             drenderer.Draw(sponza);
