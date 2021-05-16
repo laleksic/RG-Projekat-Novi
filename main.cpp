@@ -109,7 +109,7 @@ public:
             TMP(GL_FRAMEBUFFER_UNSUPPORTED)
             TMP(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
             TMP(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
-            default: cerr << "Fbo ok" << endl;
+            // default: cerr << "Fbo ok" << endl;
             #undef TMP
         }
 
