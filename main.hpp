@@ -382,6 +382,7 @@ public:
         const size_t VERTEX_COUNT = Positions.size();
         
         // Sanity checks
+        /*
         assert(Positions.size() == VERTEX_COUNT);
         assert(Colors.size() == VERTEX_COUNT);
         assert(TexCoords.size() == VERTEX_COUNT);
@@ -392,6 +393,7 @@ public:
         for (GLuint element: Elements) {
             assert(element < VERTEX_COUNT);
         }
+        */
         // ---
 
         // Attributes

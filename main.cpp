@@ -7,6 +7,90 @@ public:
     vec3 Color;
 };
 
+class DeferredRenderer {
+    enum Buffer {
+        PositionBuf,
+        DiffuseBuf,
+        SpecularBuf,
+        NormalBuf,
+        TangentBuf,
+        BitangentBuf,
+        BumpBuf,
+        TranslucencyBuf,
+
+        DepthBuf,
+
+        BufferCount
+    };
+    GLuint GBuffer[BufferCount];
+    GLuint FBO;
+    ShaderPtr GeometryStage;
+    ShaderPtr LightingStage;
+    Mesh ScreenQuad;
+
+public:
+    DeferredRenderer() {
+        glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
+        glCreateFramebuffers(1, &FBO);
+        for (int buf=0; buf<DepthBuf; ++buf)
+            glNamedFramebufferTexture(FBO, GL_COLOR_ATTACHMENT0+buf, GBuffer[buf], 0);
+        glNamedFramebufferTexture(FBO, GL_DEPTH_ATTACHMENT, GBuffer[DepthBuf], 0);
+        ScreenQuad.Positions = {
+            vec3(-1,-1,0),
+            vec3(1,-1,0),
+            vec3(1,1,0),
+            vec3(-1,1,0)
+        };
+        ScreenQuad.TexCoords = {
+            vec2(0,0),
+            vec2(1,0),
+            vec2(1,1),
+            vec2(0,1)
+        };
+        ScreenQuad.UploadToGPU();
+        GeometryStage = Load<Shader>("Data/shaders/DRGeometry.glsl");
+        LightingStage = Load<Shader>("Data/shaders/DRLighting.glsl");
+        for (int buf=0; buf<DepthBuf; ++buf) {
+            LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
+        }
+    }
+    void Update() {
+        if (TheEngine->WasWindowResized()) {
+            ivec2 dims = TheEngine->GetWindowSize();
+            glTextureStorage2D(GBuffer[PositionBuf], 1, GL_RGB32F, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[DiffuseBuf], 1, GL_RGB8, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[SpecularBuf], 1, GL_RGB8, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[NormalBuf], 1, GL_RGB32F, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[TangentBuf], 1, GL_RGB32F, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[BitangentBuf], 1, GL_RGB32F, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[BumpBuf], 1, GL_RGB8, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[TranslucencyBuf], 1, GL_RGB8, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[DepthBuf], 1, GL_DEPTH_COMPONENT16, dims.x, dims.y);
+        }
+    }
+    ~DeferredRenderer() {
+        glDeleteTextures(BufferCount, &GBuffer[0]);
+        glDeleteFramebuffers(1, &FBO);
+    }
+    void SetModelMatrix(mat4 model) {
+
+    }
+    void BeginGeometryStage() {
+        GeometryStage->Use();
+        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+    }
+    void EndGeometryStage() {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+    void DoLightingStage() {
+        LightingStage->Use();
+        for (int buf=0; buf<DepthBuf; ++buf) {
+            glBindTextureUnit(buf, GBuffer[buf]);
+        }
+        ScreenQuad.Draw();
+    }
+};
+
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
 
