@@ -13,9 +13,6 @@ public:
         DiffuseBuf,
         SpecularBuf,
         NormalBuf,
-        TangentBuf,
-        BitangentBuf,
-        BumpBuf,
         TranslucencyBuf,
 
         DepthBuf,
@@ -50,9 +47,7 @@ public:
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
         glCreateFramebuffers(1, &FBO);
-        for (int buf=0; buf<DepthBuf; ++buf)
-            glNamedFramebufferTexture(FBO, GL_COLOR_ATTACHMENT0+buf, GBuffer[buf], 0);
-        glNamedFramebufferTexture(FBO, GL_DEPTH_ATTACHMENT, GBuffer[DepthBuf], 0);
+
         ScreenQuad.Positions = {
             vec3(-1,-1,0),
             vec3(1,-1,0),
@@ -64,6 +59,10 @@ public:
             vec2(1,0),
             vec2(1,1),
             vec2(0,1)
+        };
+        ScreenQuad.Elements = {
+            0,1,2,
+            2,3,0
         };
         ScreenQuad.UploadToGPU();
         GeometryStage = Load<Shader>("Data/shaders/DRGeometry.glsl");
@@ -77,18 +76,40 @@ public:
             LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
         }
     }
-    void Update(Camera& camera) {
+    void Update(const Camera& camera) {
         if (TheEngine->WasWindowResized()) {
+            glDeleteTextures(BufferCount, &GBuffer[0]);
+            glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
+
             ivec2 dims = TheEngine->GetWindowSize();
-            glTextureStorage2D(GBuffer[PositionBuf], 1, GL_RGB32F, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[PositionBuf], 1, GL_RGBA32F, dims.x, dims.y);
             glTextureStorage2D(GBuffer[DiffuseBuf], 1, GL_RGB8, dims.x, dims.y);
             glTextureStorage2D(GBuffer[SpecularBuf], 1, GL_RGB8, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[NormalBuf], 1, GL_RGB32F, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[TangentBuf], 1, GL_RGB32F, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[BitangentBuf], 1, GL_RGB32F, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[BumpBuf], 1, GL_RGB8, dims.x, dims.y);
+            glTextureStorage2D(GBuffer[NormalBuf], 1, GL_RGBA32F, dims.x, dims.y);
             glTextureStorage2D(GBuffer[TranslucencyBuf], 1, GL_RGB8, dims.x, dims.y);
             glTextureStorage2D(GBuffer[DepthBuf], 1, GL_DEPTH_COMPONENT16, dims.x, dims.y);
+        }
+        vector<GLenum> drawBufs;
+        for (int buf=0; buf<DepthBuf; ++buf) {
+            glNamedFramebufferTexture(FBO, GL_COLOR_ATTACHMENT0+buf, GBuffer[buf], 0);
+            drawBufs.push_back(GL_COLOR_ATTACHMENT0+buf);
+        }
+        glNamedFramebufferTexture(FBO, GL_DEPTH_ATTACHMENT, GBuffer[DepthBuf], 0);
+        glNamedFramebufferDrawBuffers(FBO, drawBufs.size(), drawBufs.data());
+
+        GLenum fboStatus = glCheckNamedFramebufferStatus(FBO, GL_FRAMEBUFFER);
+        switch (fboStatus) {
+            #define TMP(v) case v: cerr<< #v << endl; abort(); break;
+            TMP(GL_FRAMEBUFFER_UNDEFINED)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER)
+            TMP(GL_FRAMEBUFFER_UNSUPPORTED)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
+            default: cerr << "Fbo ok" << endl;
+            #undef TMP
         }
 
         ivec2 windowSize = TheEngine->GetWindowSize();
@@ -96,6 +117,7 @@ public:
         mat4 projectionMat = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
         VPMat = projectionMat * camera.GetViewMatrix();
         GeometryStage->SetUniform("MVPMat", VPMat);
+        GeometryStage->SetUniform("CameraPosition", camera.GetPosition());
 
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
 
@@ -122,6 +144,10 @@ public:
         }
     }
     void BeginGeometryStage() {
+        SetModelMatrix(mat4(1.0f));
+        
+        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+
         ivec2 windowSize = TheEngine->GetWindowSize();
         glViewport(0,0, windowSize.x, windowSize.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -129,13 +155,22 @@ public:
         glEnable(GL_DEPTH_TEST);
 
         GeometryStage->Use();
-        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
     }
     void EndGeometryStage() {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
     void DoLightingStage() {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        ivec2 windowSize = TheEngine->GetWindowSize();
+
+        glViewport(0,0, windowSize.x, windowSize.y);
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+
         LightingStage->Use();
+
         for (int buf=0; buf<DepthBuf; ++buf) {
             glBindTextureUnit(buf, GBuffer[buf]);
         }
@@ -149,23 +184,37 @@ public:
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
     DeferredRenderer drenderer;
+    drenderer.AmbientLight = vec3(0.5);
 
-    ModelPtr sponza = Load<Model>("Data/models/sponza.obj");
-    
     FPSCamera camera;
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
 
+    drenderer.Update(camera);
+
+    ModelPtr sponza = Load<Model>("Data/models/sponza.obj");
+
     while (TheEngine->Run()) {
         ImGui::DragFloat("Parallax depth",&drenderer.ParallaxDepth,
-            0.01f, 0, 0.2f, "%f", 1.0f);             
+            0.01f, 0, 0.2f, "%f", 1.0f); 
+        #define TMP(v) if (ImGui::Button(#v)) {\
+            drenderer.VisualizeBuffer(v);\
+        }
+        TMP(DeferredRenderer::PositionBuf);
+        TMP(DeferredRenderer::DiffuseBuf);
+        TMP(DeferredRenderer::SpecularBuf);
+        TMP(DeferredRenderer::NormalBuf);
+        TMP(DeferredRenderer::TranslucencyBuf);
+        #undef TMP
         
         camera.Update();
         drenderer.Update(camera);
 
+        
         drenderer.BeginGeometryStage();
             drenderer.SetModelMatrix(scale(vec3(0.01f)));
             drenderer.Draw(sponza);
         drenderer.EndGeometryStage();
+        
         drenderer.DoLightingStage();
     }
 }

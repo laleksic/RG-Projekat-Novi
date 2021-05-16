@@ -103,6 +103,8 @@ public:
                 if (type == GL_DEBUG_TYPE_ERROR) {
                     cerr << "GL error: " << message << endl;
                     abort();
+                } else {
+                    cerr << "GL msg: " << message << endl;
                 }
         }, 0);
 
@@ -481,7 +483,7 @@ public:
             glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetShaderInfoLog(vertexShader, bufSize, 0, &buf[0]);
-            cerr << "Vertex shader error: " << buf << endl;
+            cerr << path << ": Vertex shader error: " << buf << endl;
             abort();
         }
         glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &ok);
@@ -490,7 +492,7 @@ public:
             glGetShaderiv(fragmentShader, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetShaderInfoLog(fragmentShader, bufSize, 0, &buf[0]);
-            cerr << "Fragment shader error: " << buf << endl;
+            cerr << path << ": Fragment shader error: " << buf << endl;
             abort();
         }
         glGetProgramiv(Program, GL_LINK_STATUS, &ok);
@@ -499,7 +501,7 @@ public:
             glGetProgramiv(Program, GL_INFO_LOG_LENGTH, &bufSize);
             GLchar buf[bufSize];
             glGetProgramInfoLog(Program, bufSize, 0, &buf[0]);
-            cerr << "Shader linking error: " << buf << endl;
+            cerr << path << ": Shader linking error: " << buf << endl;
             abort();
         }
 
@@ -515,6 +517,12 @@ public:
             1, GL_FALSE, value_ptr(value)
         );
     }
+    void SetUniform(string name, const mat3& value) {
+        glProgramUniformMatrix3fv(Program, 
+            glGetUniformLocation(Program, name.c_str()),
+            1, GL_FALSE, value_ptr(value)
+        );
+    }    
     void SetUniform(string name, GLint value) {
         glProgramUniform1i(Program, 
             glGetUniformLocation(Program, name.c_str()),
