@@ -9,21 +9,15 @@ uniform sampler2D BumpMap;
 uniform sampler2D TranslucencyMap;
 uniform float ParallaxDepth;
 
-#if defined(VERTEX_SHADER)
-out
-#elif defined(FRAGMENT_SHADER)
-in
-#endif
-VertexData {
-    vec2 TexCoords;
-    vec3 WSPosition;
-    vec3 WSNormal;
-    vec3 TSToCamera;
-    mat3 Tangent2World;
-} vertexData;
+#ifdef VERTEX_SHADER
+    out VertexData {
+        vec2 TexCoords;
+        vec3 WSPosition;
+        vec3 WSNormal;
+        vec3 TSToCamera;
+        mat3 Tangent2World;
+    } vertexData;
 
-#if defined(VERTEX_SHADER)
-#line 1
     layout (location=0) in vec3 Position;
     layout (location=1) in vec3 Color;
     layout (location=2) in vec2 TexCoords;
@@ -45,10 +39,21 @@ VertexData {
             wsBitangent, 
             vertexData.WSNormal
             );
-        vertexData.TSToCamera = inverse(vertexData.Tangent2World) * (CameraPosition - vertexData.WSPosition);
-        vertexData.TSToCamera = normalize(vertexData.TSToCamera);
+        vertexData.TSToCamera = normalize(
+            inverse(vertexData.Tangent2World) * normalize(CameraPosition - vertexData.WSPosition)
+        );
     }
-#elif defined(FRAGMENT_SHADER)
+#endif
+
+#ifdef FRAGMENT_SHADER
+    in VertexData {
+        vec2 TexCoords;
+        vec3 WSPosition;
+        vec3 WSNormal;
+        vec3 TSToCamera;
+        mat3 Tangent2World;
+    } vertexData;
+
     //G-Buffer
     out vec3 PositionBuf;
     out vec3 DiffuseBuf;
@@ -56,21 +61,26 @@ VertexData {
     out vec3 NormalBuf;
     out vec3 TranslucencyBuf;
 
+    float ParallaxMappingQuality(vec3 tsToCamera, vec2 st) {
+        float mipLevel = (textureQueryLod(BumpMap, st).y);
+        float align = 1-max(0, dot(tsToCamera, vec3(0,0,1)));
+        if (mipLevel < 0.1) {
+            return 1;
+        } else {
+            return align * 1/(mipLevel);
+        }
+    }
+
     void ReliefParallaxMapping(
         in vec3 tsToCamera,
         inout vec2 st
     ) {
+        return;
+
         // This fixes things for "reasons"
         tsToCamera.y *= -1;
 
-        float mipLevel = (textureQueryLod(BumpMap, st).y);
-        float align = 1-max(0, dot(tsToCamera, vec3(0,0,1)));
-        float quality;
-        if (mipLevel < 0.1) {
-            quality = 1;
-        } else {
-            quality = align * 1/(mipLevel);
-        }
+        float quality = ParallaxMappingQuality(tsToCamera, st);
 
         // Steep parallax mapping
         float minLayers = 4;
@@ -88,6 +98,8 @@ VertexData {
             currLayerDepth += depthStep;
             st += stStep;
         }
+
+        return;
 
         // Relief parallax mapping
         float minSteps = 2;
@@ -112,11 +124,13 @@ VertexData {
 
     void main() {
         vec2 texCoords = vertexData.TexCoords;
-        // ReliefParallaxMapping(vertexData.TSToCamera, texCoords);
+        ReliefParallaxMapping(vertexData.TSToCamera, texCoords);
         PositionBuf = vertexData.WSPosition;
         DiffuseBuf = texture(DiffuseMap, texCoords).rgb;
         SpecularBuf = texture(SpecularMap, texCoords).rgb;
-        NormalBuf = Normal2RGB(vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb));
-        TranslucencyBuf = texture(TranslucencyMap, texCoords).rgb;
+        // NormalBuf = Normal2RGB(vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb));
+        // TranslucencyBuf = texture(TranslucencyMap, texCoords).rgb;
+        NormalBuf = vertexData.TSToCamera;
+        TranslucencyBuf = vec3(ParallaxMappingQuality(vertexData.TSToCamera, texCoords));
     }
 #endif
