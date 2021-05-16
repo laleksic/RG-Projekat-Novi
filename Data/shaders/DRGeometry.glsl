@@ -17,12 +17,7 @@ in
 VertexData {
     vec2 TexCoords;
     vec3 WSPosition;
-    vec3 MSNormal;
-    vec3 MSTangent;
-    vec3 MSBitangent;
     vec3 WSNormal;
-    vec3 WSTangent;
-    vec3 WSBitangent;
     vec3 TSToCamera;
     mat3 Tangent2World;
 } vertexData;
@@ -43,19 +38,15 @@ VertexData {
         vertexData.WSPosition = (ModelMat * vec4(Position,1)).xyz;
         vertexData.TexCoords = TexCoords;
         vertexData.WSNormal = normalize( NormalMat * Normal );
-        vertexData.WSTangent = normalize( NormalMat * Tangent );
-        vertexData.WSBitangent = normalize( NormalMat * Bitangent );
+        vec3 wsTangent = normalize( NormalMat * Tangent );
+        vec3 wsBitangent = normalize( NormalMat * Bitangent );
         vertexData.Tangent2World = mat3(
-            vertexData.WSTangent, 
-            vertexData.WSBitangent, 
+            wsTangent, 
+            wsBitangent, 
             vertexData.WSNormal
             );
-        // vertexData.TSToCamera = transpose(vertexData.Tangent2World) * normalize(CameraPosition - vertexData.WSPosition);
-        // vertexData.TSToCamera = normalize(vertexData.TSToCamera);
-        
-        vertexData.MSNormal = Normal;
-        vertexData.MSTangent = Tangent;
-        vertexData.MSBitangent = Bitangent;
+        vertexData.TSToCamera = inverse(vertexData.Tangent2World) * (CameraPosition - vertexData.WSPosition);
+        vertexData.TSToCamera = normalize(vertexData.TSToCamera);
     }
 #elif defined(FRAGMENT_SHADER)
     //G-Buffer
@@ -122,14 +113,10 @@ VertexData {
     void main() {
         vec2 texCoords = vertexData.TexCoords;
         // ReliefParallaxMapping(vertexData.TSToCamera, texCoords);
-        PositionBuf = Normal2RGB(vertexData.WSTangent);
-        // DiffuseBuf = texture(DiffuseMap, texCoords).rgb;
-        DiffuseBuf = Normal2RGB(vertexData.WSBitangent);
-        // SpecularBuf = texture(SpecularMap, texCoords).rgb;
-        SpecularBuf = Normal2RGB(vertexData.WSNormal);
-        // NormalBuf = vertexData.Tangent2World * (texture(NormalMap, texCoords).rgb*2-1);
-        // NormalBuf = texture(NormalMap, texCoords).rgb;
-        NormalBuf =  (texture(NormalMap, texCoords).rgb);
-        TranslucencyBuf = Normal2RGB(vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb));
+        PositionBuf = vertexData.WSPosition;
+        DiffuseBuf = texture(DiffuseMap, texCoords).rgb;
+        SpecularBuf = texture(SpecularMap, texCoords).rgb;
+        NormalBuf = Normal2RGB(vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb));
+        TranslucencyBuf = texture(TranslucencyMap, texCoords).rgb;
     }
 #endif
