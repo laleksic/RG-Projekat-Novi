@@ -1,13 +1,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "main.hpp"
 
-class Light {
-public:
+struct Light {
     vec3 Position;
     vec3 Color;
 };
 
 class DeferredRenderer {
+public:
     enum Buffer {
         PositionBuf,
         DiffuseBuf,
@@ -22,25 +22,30 @@ class DeferredRenderer {
 
         BufferCount
     };
+private:
     GLuint GBuffer[BufferCount];
     GLuint FBO;
     ShaderPtr GeometryStage;
     ShaderPtr LightingStage;
     Mesh ScreenQuad;
     mat4 VPMat;
+
+    void SetMaterial(Material mat) {
+        mat.DiffuseMap->Bind(0);
+        mat.SpecularMap->Bind(1);
+        mat.NormalMap->Bind(2);
+        mat.BumpMap->Bind(3);
+        mat.TranslucencyMap->Bind(4);
+        if (mat.DiffuseMap->ShouldAlphaClip())
+            glDisable(GL_CULL_FACE);
+        else
+            glEnable(GL_CULL_FACE);
+    }    
 public:
     float ParallaxDepth =0.04f;
-
-    void SetAmbientLight(vec3 ambientLight) {
-        LightingStage->SetUniform("AmbientLight", ambientLight);
-    }
-    void SetLightCount(int count) {
-        LightingStage->SetUniform("LightCount", count);
-    }
-    void SetLight(int i, vec3 pos, vec3 color) {
-        LightingStage->SetUniform("Lights["+to_string(i)+"].Position", pos);
-        LightingStage->SetUniform("Lights["+to_string(i)+"].Color", color);
-    }
+    vec3 AmbientLight = vec3(1);
+    vector<Light> Lights;
+    const int MAX_LIGHTS = 32; // Keep in sync with shader!
 
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
@@ -93,6 +98,13 @@ public:
         GeometryStage->SetUniform("MVPMat", VPMat);
 
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
+
+        LightingStage->SetUniform("AmbientLight", AmbientLight);
+        LightingStage->SetUniform("LightCount", std::max((int)Lights.size(), MAX_LIGHTS));
+        for (int i=0; i<Lights.size(); ++i) {
+            LightingStage->SetUniform("Lights["+to_string(i)+"].Position", Lights[i].Position);
+            LightingStage->SetUniform("Lights["+to_string(i)+"].Color", Lights[i].Color);
+        }
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
@@ -102,17 +114,7 @@ public:
         GeometryStage->SetUniform("NormalMat", mat3(transpose(inverse(model))));
         GeometryStage->SetUniform("MVPMat", VPMat * model);
     }
-    void SetMaterial(Material mat) {
-        mat.DiffuseMap->Bind(0);
-        mat.SpecularMap->Bind(1);
-        mat.NormalMap->Bind(2);
-        mat.BumpMap->Bind(3);
-        mat.TranslucencyMap->Bind(4);
-        if (mat.DiffuseMap->ShouldAlphaClip())
-            glDisable(GL_CULL_FACE);
-        else
-            glEnable(GL_CULL_FACE);
-    }
+
     void Draw(ModelPtr model) {
         for (int i=0; i<model->Meshes.size(); ++i) {
             SetMaterial(model->Materials[i]);
@@ -120,6 +122,12 @@ public:
         }
     }
     void BeginGeometryStage() {
+        ivec2 windowSize = TheEngine->GetWindowSize();
+        glViewport(0,0, windowSize.x, windowSize.y);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+
         GeometryStage->Use();
         glBindFramebuffer(GL_FRAMEBUFFER, FBO);
     }
@@ -133,123 +141,31 @@ public:
         }
         ScreenQuad.Draw();
     }
+    void VisualizeBuffer(int buf) {
+        LightingStage->SetUniform("VisualizeBuffer", buf);
+    }
 };
 
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
+    DeferredRenderer drenderer;
 
-    // Load resources
-    // ------
     ModelPtr sponza = Load<Model>("Data/models/sponza.obj");
-    ModelPtr cube = Load<Model>("Data/models/cube.obj");
-    ShaderPtr basicShader = Load<Shader>("Data/shaders/BasicShader.glsl");
-    ShaderPtr lightCubeShader = Load<Shader>("Data/shaders/LightCube.glsl");
     
-    // -- Setup scene
-    vector<Light> lights[2];
-    float lightLerp = 0.0f;
     FPSCamera camera;
-
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
 
-    const int LIGHT_COUNT = 32;
-    for (int j=0; j<2; ++j) {
-        for (int i=0; i<LIGHT_COUNT; ++i) {
-            Light light;
-            light.Position = vec3(
-                RandomFloat(-7.5, 7.5),
-                RandomFloat(0, 7.5),
-                RandomFloat(-15, 5)
-            );
-            light.Color = vec3(
-                RandomFloat(),
-                RandomFloat(),
-                RandomFloat()
-            );
-            lights[j].push_back(light);
-        }
-    }
-
-    // Setup shaders --
-    basicShader->SetUniform("DiffuseTexture", 0);  
-    basicShader->SetUniform("SpecularTexture", 1);  
-    basicShader->SetUniform("NormalTexture", 2);  
-    basicShader->SetUniform("BumpTexture", 3);      
-
     while (TheEngine->Run()) {
-        // Update non-gpu stuff
-        // ---------
-        camera.Update();
-
-        // Calculate stuff we'll need
-        // ----
-        ivec2 windowSize = TheEngine->GetWindowSize();
-        float aspectRatio = (float)windowSize.x / windowSize.y;
+        ImGui::DragFloat("Parallax depth",&drenderer.ParallaxDepth,
+            0.01f, 0, 0.2f, "%f", 1.0f);             
         
-        mat4 modelMat = scale(vec3(0.01f));
-        mat4 projectionMat = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
-        mat4 vpMat = projectionMat * camera.GetViewMatrix();
-        mat4 mvpMat = vpMat * modelMat;
+        camera.Update();
+        drenderer.Update(camera);
 
-        // Update per-frame uniforms
-        // ----------------
-        basicShader->SetUniform("MVPMat", mvpMat);
-        basicShader->SetUniform("ModelMat", modelMat);
-        basicShader->SetUniform("CameraPosition", camera.GetPosition());
-
-        static float parallaxDepth = 0.04f;
-        ImGui::DragFloat("Parallax depth",&parallaxDepth,
-            0.01f, 0, 0.2f, "%f", 1.0f);     
-        basicShader->SetUniform("ParallaxDepth", parallaxDepth);
-
-        for (int i=0; i<lights[0].size(); ++i) {
-            vec3 lightPosition = lerp(lights[0][i].Position, lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
-            vec3 lightColor = lerp(lights[0][i].Color, lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
-            basicShader->SetUniform("Lights["+to_string(i)+"].Position", lightPosition);
-            basicShader->SetUniform("Lights["+to_string(i)+"].Color", lightColor);
-        }
-        basicShader->SetUniform("AmbientLight", vec3(0.075,0.075,0.125));
-        lightLerp = (sin(glfwGetTime())+1.0)/2.0;
-
-        //===
-        glViewport(0,0, windowSize.x, windowSize.y);
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-
-        // Render standard scene
-        // ----------------------
-        basicShader->Use( );
-        for (int i=0; i<sponza->Meshes.size(); ++i) {
-            if (sponza->Materials[i].Translucent) {
-                glDisable(GL_CULL_FACE);
-                basicShader->SetUniform("Translucent", true);
-            } else {
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_BACK);
-                basicShader->SetUniform("Translucent", false);
-            }
-            sponza->Materials[i].DiffuseMap->Bind(0);
-            sponza->Materials[i].SpecularMap->Bind(1);
-            sponza->Materials[i].NormalMap->Bind(2);
-            sponza->Materials[i].BumpMap->Bind(3);
-            sponza->Meshes[i]->Draw();
-        }
-
-        // Render lights as cubes
-        // ----------------------
-        lightCubeShader->Use();
-        for (int i=0; i<lights[0].size(); ++i) {
-            vec3 lightPosition = lerp(lights[0][i].Position, lights[1][i].Position, smoothstep(0.0f,1.0f,lightLerp));
-            vec3 lightColor = lerp(lights[0][i].Color, lights[1][i].Color, smoothstep(0.0f,1.0f,lightLerp));
-            modelMat = translate(lightPosition) * scale(vec3(0.125f));
-            mvpMat = vpMat * modelMat;
-            lightCubeShader->SetUniform("MVPMat", mvpMat);
-            lightCubeShader->SetUniform("ModelMat", modelMat);
-            lightCubeShader->SetUniform("LightColor", lightColor);
-            for (int j=0; j<cube->Meshes.size(); ++j) {
-                cube->Meshes[j]->Draw();
-            }  
-        }
+        drenderer.BeginGeometryStage();
+            drenderer.SetModelMatrix(scale(vec3(0.01f)));
+            drenderer.Draw(sponza);
+        drenderer.EndGeometryStage();
+        drenderer.DoLightingStage();
     }
 }
