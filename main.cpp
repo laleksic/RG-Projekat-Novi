@@ -133,7 +133,8 @@ public:
         glDeleteFramebuffers(1, &FBO);
     }
     void SetModelMatrix(mat4 model) {
-        GeometryStage->SetUniform("NormalMat", mat3(transpose(inverse(model))));
+        GeometryStage->SetUniform("NormalMat", mat3(transpose(inverse(mat3(model)))));
+        GeometryStage->SetUniform("ModelMat", model);
         GeometryStage->SetUniform("MVPMat", VPMat * model);
     }
 
