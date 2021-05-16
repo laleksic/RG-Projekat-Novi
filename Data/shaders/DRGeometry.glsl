@@ -39,8 +39,8 @@ uniform float ParallaxDepth;
             wsBitangent, 
             vertexData.WSNormal
             );
-        vertexData.TSToCamera = normalize(
-            inverse(vertexData.Tangent2World) * normalize(CameraPosition - vertexData.WSPosition)
+        vertexData.TSToCamera = (
+            inverse(vertexData.Tangent2World) * (CameraPosition - vertexData.WSPosition)
         );
     }
 #endif
@@ -75,8 +75,6 @@ uniform float ParallaxDepth;
         in vec3 tsToCamera,
         inout vec2 st
     ) {
-        return;
-
         // This fixes things for "reasons"
         tsToCamera.y *= -1;
 
@@ -98,8 +96,6 @@ uniform float ParallaxDepth;
             currLayerDepth += depthStep;
             st += stStep;
         }
-
-        return;
 
         // Relief parallax mapping
         float minSteps = 2;
@@ -124,13 +120,26 @@ uniform float ParallaxDepth;
 
     void main() {
         vec2 texCoords = vertexData.TexCoords;
-        ReliefParallaxMapping(vertexData.TSToCamera, texCoords);
+        vec3 tsToCamera = normalize( vertexData.TSToCamera );
+        ReliefParallaxMapping(tsToCamera, texCoords);
         PositionBuf = vertexData.WSPosition;
         DiffuseBuf = texture(DiffuseMap, texCoords).rgb;
         SpecularBuf = texture(SpecularMap, texCoords).rgb;
-        // NormalBuf = Normal2RGB(vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb));
-        // TranslucencyBuf = texture(TranslucencyMap, texCoords).rgb;
-        NormalBuf = vertexData.TSToCamera;
-        TranslucencyBuf = vec3(ParallaxMappingQuality(vertexData.TSToCamera, texCoords));
+        NormalBuf = vertexData.Tangent2World * RGB2Normal(texture(NormalMap, texCoords).rgb);
+        TranslucencyBuf = texture(TranslucencyMap, texCoords).rgb;
+
+
+        // NormalBuf = tsToCamera;
+        // TranslucencyBuf = vec3(ParallaxMappingQuality(tsToCamera, texCoords));
+
+        
     }
+
+
+
+
 #endif
+
+
+
+
