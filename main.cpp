@@ -245,10 +245,13 @@ int main(int argc, char** argv) {
             RandomizeLights(drenderer, lightCount);
         }
         ImGui::ColorEdit3("Ambient light", value_ptr(drenderer.AmbientLight));
+        static bool animateLights = true;
+        ImGui::Checkbox("Animate lights", &animateLights);
+        if (animateLights)
+            AnimateLights(drenderer);
         
         camera.Update();
         drenderer.Update(camera);
-        AnimateLights(drenderer);
 
         drenderer.BeginGeometryStage();
             drenderer.SetModelMatrix(scale(vec3(0.01f)));
