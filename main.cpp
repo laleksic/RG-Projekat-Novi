@@ -27,8 +27,21 @@ class DeferredRenderer {
     ShaderPtr GeometryStage;
     ShaderPtr LightingStage;
     Mesh ScreenQuad;
-
+    mat4 VPMat;
 public:
+    float ParallaxDepth =0.04f;
+
+    void SetAmbientLight(vec3 ambientLight) {
+        LightingStage->SetUniform("AmbientLight", ambientLight);
+    }
+    void SetLightCount(int count) {
+        LightingStage->SetUniform("LightCount", count);
+    }
+    void SetLight(int i, vec3 pos, vec3 color) {
+        LightingStage->SetUniform("Lights["+to_string(i)+"].Position", pos);
+        LightingStage->SetUniform("Lights["+to_string(i)+"].Color", color);
+    }
+
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
         glCreateFramebuffers(1, &FBO);
@@ -49,12 +62,17 @@ public:
         };
         ScreenQuad.UploadToGPU();
         GeometryStage = Load<Shader>("Data/shaders/DRGeometry.glsl");
+        GeometryStage->SetUniform("DiffuseMap", 0);  
+        GeometryStage->SetUniform("SpecularMap", 1);  
+        GeometryStage->SetUniform("NormalMap", 2);  
+        GeometryStage->SetUniform("BumpMap", 3);           
+        GeometryStage->SetUniform("TranslucencyMap", 4);           
         LightingStage = Load<Shader>("Data/shaders/DRLighting.glsl");
         for (int buf=0; buf<DepthBuf; ++buf) {
             LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
         }
     }
-    void Update() {
+    void Update(Camera& camera) {
         if (TheEngine->WasWindowResized()) {
             ivec2 dims = TheEngine->GetWindowSize();
             glTextureStorage2D(GBuffer[PositionBuf], 1, GL_RGB32F, dims.x, dims.y);
@@ -67,13 +85,39 @@ public:
             glTextureStorage2D(GBuffer[TranslucencyBuf], 1, GL_RGB8, dims.x, dims.y);
             glTextureStorage2D(GBuffer[DepthBuf], 1, GL_DEPTH_COMPONENT16, dims.x, dims.y);
         }
+
+        ivec2 windowSize = TheEngine->GetWindowSize();
+        float aspectRatio = (float)windowSize.x / windowSize.y;
+        mat4 projectionMat = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
+        VPMat = projectionMat * camera.GetViewMatrix();
+        GeometryStage->SetUniform("MVPMat", VPMat);
+
+        GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
         glDeleteFramebuffers(1, &FBO);
     }
     void SetModelMatrix(mat4 model) {
-
+        GeometryStage->SetUniform("NormalMat", mat3(transpose(inverse(model))));
+        GeometryStage->SetUniform("MVPMat", VPMat * model);
+    }
+    void SetMaterial(Material mat) {
+        mat.DiffuseMap->Bind(0);
+        mat.SpecularMap->Bind(1);
+        mat.NormalMap->Bind(2);
+        mat.BumpMap->Bind(3);
+        mat.TranslucencyMap->Bind(4);
+        if (mat.DiffuseMap->ShouldAlphaClip())
+            glDisable(GL_CULL_FACE);
+        else
+            glEnable(GL_CULL_FACE);
+    }
+    void Draw(ModelPtr model) {
+        for (int i=0; i<model->Meshes.size(); ++i) {
+            SetMaterial(model->Materials[i]);
+            model->Meshes[i]->Draw();
+        }
     }
     void BeginGeometryStage() {
         GeometryStage->Use();

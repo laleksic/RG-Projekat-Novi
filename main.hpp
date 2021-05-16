@@ -434,6 +434,7 @@ public:
     TexturePtr DiffuseMap = Load<Texture>("Data/textures/white.png");
     TexturePtr SpecularMap = Load<Texture>("Data/textures/black.png");
     TexturePtr NormalMap = Load<Texture>("Data/textures/blankNormal.png");
+    TexturePtr TranslucencyMap = Load<Texture>("Data/textures/black.png");
 
     // --For parallax mapping
     TexturePtr BumpMap = Load<Texture>("Data/textures/black.png"); 
@@ -601,19 +602,18 @@ public:
             Meshes.push_back(meshp);
 
             aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
-            aiString diffuseMapPath, specularMapPath, normalMapPath, bumpMapPath;
+            aiString diffuseMapPath, specularMapPath, normalMapPath, bumpMapPath, translucencyMapPath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &diffuseMapPath);
             material->GetTexture(aiTextureType_SPECULAR, 0, &specularMapPath);
             material->GetTexture(aiTextureType_NORMALS, 0, &normalMapPath);
             material->GetTexture(aiTextureType_HEIGHT, 0, &bumpMapPath);
+            material->GetTexture(aiTextureType_OPACITY, 0, &translucencyMapPath);
             Material mat;
             if (diffuseMapPath.length!=0) mat.DiffuseMap = Load<Texture>(diffuseMapPath.C_Str());
             if (specularMapPath.length!=0) mat.SpecularMap = Load<Texture>(specularMapPath.C_Str());
             if (normalMapPath.length!=0) mat.NormalMap = Load<Texture>(normalMapPath.C_Str());
             if (bumpMapPath.length!=0) mat.BumpMap = Load<Texture>(bumpMapPath.C_Str());
-            if (mat.DiffuseMap->ShouldAlphaClip()) {
-                mat.Translucent = true;
-            }
+            if (translucencyMapPath.length!=0) mat.TranslucencyMap = Load<Texture>(translucencyMapPath.C_Str());
             Materials.push_back(mat);
         }        
     }
