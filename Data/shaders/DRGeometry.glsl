@@ -36,6 +36,7 @@ VertexData {
         gl_Position.w = 1.0f;
         gl_Position = MVPMat * gl_Position;
         vertexData.WSPosition = (ModelMat * vec4(Position,1)).xyz;
+        vertexData.TexCoords = TexCoords;
         vertexData.WSNormal = NormalMat * Normal;
         vertexData.Tangent2World = mat3(NormalMat*Tangent, NormalMat*Bitangent, vertexData.WSNormal);
         vertexData.TSToCamera = inverse(vertexData.Tangent2World) * (CameraPosition - vertexData.WSPosition);
