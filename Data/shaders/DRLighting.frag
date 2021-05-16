@@ -82,4 +82,7 @@ void main() {
 
     // Gamma correction
     Color.rgb = Gamma_FromLinear( Color.rgb );
+
+    // Tone mapping (Reinhard tone mapping)
+    Color.rgb /= Color.rgb + vec3(1);
 }

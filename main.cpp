@@ -237,13 +237,6 @@ int main(int argc, char** argv) {
             RandomizeLights(drenderer, lightCount);
         }
         ImGui::ColorEdit3("Ambient light", value_ptr(drenderer.AmbientLight));
-        static bool gammaCorrection = false;
-        ImGui::Checkbox("Gamma correction", &gammaCorrection);
-        if (gammaCorrection) {
-            drenderer.Gamma = 2.2f;
-        } else {
-            drenderer.Gamma = 1.0f;
-        }
         
         camera.Update();
         drenderer.Update(camera);
