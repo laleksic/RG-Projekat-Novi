@@ -285,13 +285,31 @@ void main() {
         lsPosition.xyz /= lsPosition.w; // Perspective divide
         float lsFragDepth = (lsPosition.z + 1) / 2;
         vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
-        const int VPL_COUNT = 40;
+        const int VPL_COUNT = 64;
         for (int i=0; i<VPL_COUNT; ++i) {
             vec2 vplUv = poissonDisk[i];
             Light vpl;
             vpl.Position = texture(RSM[RSMPositionBuf], vplUv).rgb;
             vpl.Color = texture(RSM[RSMFluxBuf], vplUv).rgb;
-            HandlePointLight(wsPosition, wsNormal, wsToCamera, vpl, diffuse, specular, translucency);
+            vec3 vplSurfaceNormal = texture(RSM[RSMNormalBuf], vplUv).rgb;
+            float attenuation =
+                AttenuateLight(length(vpl.Position-FlashlightPosition)) *
+                AttenuateLight(length(vpl.Position-wsPosition));
+            // The normals must be facing each other
+            float align = max(0, -dot(wsNormal, vplSurfaceNormal));
+
+            vec3 wsToLight = normalize(vpl.Position-wsPosition);
+            // Diffuse
+            float lambert = max(0, dot(wsToLight, wsNormal));
+            Color.rgb += diffuse * vpl.Color * lambert * attenuation * align;
+            float lambertBack = max(0, dot(wsToLight, -wsNormal));
+            Color.rgb += diffuse * vpl.Color * lambertBack * attenuation * translucency * align;
+
+            // Specular
+            vec3 halfway = normalize(wsToLight + wsToCamera);
+            float alignSpec = max(0, dot(halfway, wsNormal));
+            float shininess = pow(alignSpec, 32);
+            Color.rgb += specular * vpl.Color * shininess * attenuation * align;
         }
     }
 
