@@ -1,3 +1,7 @@
+// Sources
+// RSM: https://ericpolman.com/2016/03/17/reflective-shadow-maps/
+// Vol.Light: http://www.alexandre-pestana.com/volumetric-lights/
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "main.hpp"
 
