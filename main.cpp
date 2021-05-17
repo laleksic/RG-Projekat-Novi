@@ -343,7 +343,7 @@ int main(int argc, char** argv) {
         ImGui::Checkbox("Visualize shadowmap", &drenderer.VisualizeShadowmap);
         ImGui::SliderFloat("Gamma", &drenderer.Gamma, 1.0f, 2.2f);
         ImGui::Checkbox("Reinhard Tonemapping", &drenderer.Tonemap);
-        ImGui::SliderFloat("Fog Density", &drenderer.FogDensity, 0, 0.01f);
+        ImGui::SliderFloat("Fog Density", &drenderer.FogDensity, 0, 2);
         ImGui::SliderInt("Raymarch Steps", &drenderer.RaymarchSteps, 16, 96);
 
         camera.Update();

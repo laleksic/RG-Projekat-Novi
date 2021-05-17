@@ -98,7 +98,7 @@ vec3 RaymarchVolumetric(vec3 wsPosition) {
         accum += FlashlightColor * cutoffFactor * shadowFactor * attenuation * FogDensity;
         curPos += rayStep;
     }
-    return accum;
+    return accum / RaymarchSteps;
 }
 
 void main() {
