@@ -120,6 +120,37 @@ vec3 RaymarchVolumetric(vec3 wsPosition) {
     return accum / RaymarchSteps;
 }
 
+void HandlePointLight(
+    in vec3 wsPosition,
+    in vec3 wsNormal,
+    in vec3 wsToCamera,
+    in Light l,
+    // Samples from the various maps used in shading
+    in vec3 diffuse,
+    in vec3 specular,
+    in vec3 translucency
+){
+    vec3 wsLightPosition = l.Position;
+    vec3 lightColor = l.Color;
+    vec3 wsToLight = (wsLightPosition - wsPosition);
+    float distanceToLight = length(wsToLight);
+    wsToLight = normalize(wsToLight);
+
+    float attenuation = AttenuateLight(distanceToLight);
+
+    // Diffuse
+    float lambert = max(0, dot(wsToLight, wsNormal));
+    Color.rgb += diffuse * lightColor * lambert * attenuation;
+    float lambertBack = max(0, dot(wsToLight, -wsNormal));
+    Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency;
+
+    // Specular
+    vec3 halfway = normalize(wsToLight + wsToCamera);
+    float align = max(0, dot(halfway, wsNormal));
+    float shininess = pow(align, 32);
+    Color.rgb += specular * lightColor * shininess * attenuation;
+}
+
 void main() {
     Color.rgb = vec3(0);
     Color.a = 1;
@@ -152,27 +183,8 @@ void main() {
     // (A global ambient light)
     Color.rgb += AmbientLight.rgb * diffuse;
 
-    // Point lights
     for (int i=0; i<LightCount; ++i) {
-        vec3 wsLightPosition = Lights[i].Position;
-        vec3 lightColor = Lights[i].Color;
-        vec3 wsToLight = (wsLightPosition - wsPosition);
-        float distanceToLight = length(wsToLight);
-        wsToLight = normalize(wsToLight);
-
-        float attenuation = AttenuateLight(distanceToLight);
-
-        // Diffuse
-        float lambert = max(0, dot(wsToLight, wsNormal));
-        Color.rgb += diffuse * lightColor * lambert * attenuation;
-        float lambertBack = max(0, dot(wsToLight, -wsNormal));
-        Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency;
-
-        // Specular
-        vec3 halfway = normalize(wsToLight + wsToCamera);
-        float align = max(0, dot(halfway, wsNormal));
-        float shininess = pow(align, 32);
-        Color.rgb += specular * lightColor * shininess * attenuation;
+        HandlePointLight(wsPosition, wsNormal, wsToCamera, Lights[i], diffuse, specular, translucency);
     }
 
     // // The flashlight 
