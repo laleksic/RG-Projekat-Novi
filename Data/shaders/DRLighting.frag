@@ -22,7 +22,9 @@ uniform vec3 FlashlightDirection;
 uniform vec3 FlashlightColor;
 uniform float FlashlightCutoffAng;
 uniform sampler2D GBuffer[BufferCount];
+uniform sampler2D Shadowmap;
 uniform int VisualizeBuffer;
+uniform bool VisualizeShadowmap;
 uniform vec3 CameraPosition;
 uniform float Gamma;
 
@@ -42,9 +44,23 @@ float AttenuateLight(float distanceToLight) {
 vec3 Gamma_ToLinear(vec3 c) {return pow(c,vec3(Gamma));}
 vec3 Gamma_FromLinear(vec3 c) {return pow(c,vec3(1/Gamma));}
 
+//http://glampert.com/2014/01-26/visualizing-the-depth-buffer/
+float LinearizeDepth(in vec2 uv)
+{
+    float zNear = 0.1;//0.5;    // TODO: Replace by the zNear of your perspective projection
+    float zFar  = 250.0;//2000.0; // TODO: Replace by the zFar  of your perspective projection
+    float depth = texture2D(Shadowmap, uv).x;
+    return (2.0 * zNear) / (zFar + zNear - depth * (zFar - zNear));
+}
+
+
 void main() {
     Color.rgb = vec3(0);
     Color.a = 1;
+    if (VisualizeShadowmap) {
+        Color.rgb = vec3(LinearizeDepth(vertexData.TexCoords));
+        return;
+    }    
     if (VisualizeBuffer >=0 && VisualizeBuffer <BufferCount) {
         Color.rgb = texture(GBuffer[VisualizeBuffer], vertexData.TexCoords).rgb;
         return;

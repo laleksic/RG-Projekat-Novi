@@ -28,11 +28,15 @@ public:
     };
 private:
     GLuint GBuffer[BufferCount];
-    GLuint FBO;
+    GLuint Shadowmap;
+    GLuint ShadowmapFBO;
+    GLuint GeometryFBO;
+    ShaderPtr ShadowmapStage;
     ShaderPtr GeometryStage;
     ShaderPtr LightingStage;
     Mesh ScreenQuad;
-    mat4 VPMat;
+    mat4 ShadowmapVPMat;
+    mat4 GeometryVPMat;
 
     void SetMaterial(Material mat) {
         mat.DiffuseMap->Bind(0);
@@ -48,14 +52,21 @@ private:
 public:
     float ParallaxDepth =0.04f;
     float Gamma =2.2f;
+    bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
     const int MAX_LIGHTS = 100; // Keep in sync with shader!
+    const int SHADOWMAP_SIZE = 512;
     Spotlight Flashlight;
 
     DeferredRenderer() {
+        glCreateTextures(GL_TEXTURE_2D, 1, &Shadowmap);
+        glTextureStorage2D(Shadowmap, 1, GL_DEPTH_COMPONENT16, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
+        glCreateFramebuffers(1, &ShadowmapFBO);
+        glNamedFramebufferTexture(ShadowmapFBO, GL_DEPTH_ATTACHMENT, Shadowmap, 0);
+
         glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
-        glCreateFramebuffers(1, &FBO);
+        glCreateFramebuffers(1, &GeometryFBO);
 
         ScreenQuad.Positions = {
             vec3(-1,-1,0),
@@ -74,6 +85,8 @@ public:
             2,3,0
         };
         ScreenQuad.UploadToGPU();
+        ShadowmapStage = Load<Shader>("Data/shaders/DepthOnly");
+        ShadowmapStage->SetUniform("DiffuseMap", 0);  
         GeometryStage = Load<Shader>("Data/shaders/DRGeometry");
         GeometryStage->SetUniform("DiffuseMap", 0);  
         GeometryStage->SetUniform("SpecularMap", 1);  
@@ -81,9 +94,11 @@ public:
         GeometryStage->SetUniform("BumpMap", 3);           
         GeometryStage->SetUniform("TranslucencyMap", 4);           
         LightingStage = Load<Shader>("Data/shaders/DRLighting");
-        for (int buf=0; buf<DepthBuf; ++buf) {
+        int buf = 0;
+        for (;buf<DepthBuf; ++buf) {
             LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
         }
+        LightingStage->SetUniform("ShadowMap", buf++);
     }
     void Update(const Camera& camera) {
         if (TheEngine->WasWindowResized()) {
@@ -100,13 +115,13 @@ public:
         }
         vector<GLenum> drawBufs;
         for (int buf=0; buf<DepthBuf; ++buf) {
-            glNamedFramebufferTexture(FBO, GL_COLOR_ATTACHMENT0+buf, GBuffer[buf], 0);
+            glNamedFramebufferTexture(GeometryFBO, GL_COLOR_ATTACHMENT0+buf, GBuffer[buf], 0);
             drawBufs.push_back(GL_COLOR_ATTACHMENT0+buf);
         }
-        glNamedFramebufferTexture(FBO, GL_DEPTH_ATTACHMENT, GBuffer[DepthBuf], 0);
-        glNamedFramebufferDrawBuffers(FBO, drawBufs.size(), drawBufs.data());
+        glNamedFramebufferTexture(GeometryFBO, GL_DEPTH_ATTACHMENT, GBuffer[DepthBuf], 0);
+        glNamedFramebufferDrawBuffers(GeometryFBO, drawBufs.size(), drawBufs.data());
 
-        GLenum fboStatus = glCheckNamedFramebufferStatus(FBO, GL_FRAMEBUFFER);
+        GLenum fboStatus = glCheckNamedFramebufferStatus(GeometryFBO, GL_FRAMEBUFFER);
         switch (fboStatus) {
             #define TMP(v) case v: cerr<< #v << endl; abort(); break;
             TMP(GL_FRAMEBUFFER_UNDEFINED)
@@ -124,9 +139,11 @@ public:
         ivec2 windowSize = TheEngine->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
         mat4 projectionMat = perspective(radians(60.0f), aspectRatio, 0.1f, 250.0f);  
-        VPMat = projectionMat * camera.GetViewMatrix();
-        GeometryStage->SetUniform("MVPMat", VPMat);
+        GeometryVPMat = projectionMat * camera.GetViewMatrix();
+        GeometryStage->SetUniform("MVPMat", GeometryVPMat);
         GeometryStage->SetUniform("CameraPosition", camera.GetPosition());
+        ShadowmapVPMat = perspective(Flashlight.CutoffAng, 1.0f, 0.1f, 250.0f) * Flashlight.GetViewMatrix();
+        ShadowmapStage->SetUniform("MVPMat", ShadowmapVPMat);
 
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
         GeometryStage->SetUniform("Gamma", Gamma);
@@ -143,15 +160,17 @@ public:
         LightingStage->SetUniform("FlashlightCutoffAng", Flashlight.CutoffAng);
         LightingStage->SetUniform("CameraPosition", camera.GetPosition());
         LightingStage->SetUniform("Gamma", Gamma);
+        LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
-        glDeleteFramebuffers(1, &FBO);
+        glDeleteFramebuffers(1, &GeometryFBO);
     }
     void SetModelMatrix(mat4 model) {
         GeometryStage->SetUniform("NormalMat", mat3(transpose(inverse(mat3(model)))));
         GeometryStage->SetUniform("ModelMat", model);
-        GeometryStage->SetUniform("MVPMat", VPMat * model);
+        GeometryStage->SetUniform("MVPMat", GeometryVPMat * model);
+        ShadowmapStage->SetUniform("MVPMat", ShadowmapVPMat * model);
     }
 
     void Draw(ModelPtr model) {
@@ -160,10 +179,26 @@ public:
             model->Meshes[i]->Draw();
         }
     }
+    void BeginShadowmapStage() {
+        SetModelMatrix(mat4(1.0f));
+        
+        glBindFramebuffer(GL_FRAMEBUFFER, ShadowmapFBO);
+
+        ivec2 windowSize = TheEngine->GetWindowSize();
+        glViewport(0,0, windowSize.x, windowSize.y);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+
+        ShadowmapStage->Use();
+    }
+    void EndShadowmapStage() {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
     void BeginGeometryStage() {
         SetModelMatrix(mat4(1.0f));
         
-        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, GeometryFBO);
 
         ivec2 windowSize = TheEngine->GetWindowSize();
         glViewport(0,0, windowSize.x, windowSize.y);
@@ -188,9 +223,11 @@ public:
 
         LightingStage->Use();
 
-        for (int buf=0; buf<DepthBuf; ++buf) {
+        int buf=0;
+        for (; buf<DepthBuf; ++buf) {
             glBindTextureUnit(buf, GBuffer[buf]);
         }
+        glBindTextureUnit(buf++, Shadowmap);
         ScreenQuad.Draw();
     }
     void VisualizeBuffer(int buf) {
@@ -276,9 +313,15 @@ int main(int argc, char** argv) {
         ImGui::SliderAngle("Flashlight cutoff angle", &drenderer.Flashlight.CutoffAng,
             0.0f, 60.0f);
         ImGui::ColorEdit3("Flashlight color", value_ptr(drenderer.Flashlight.Color));
-        
+        ImGui::Checkbox("Visualize shadowmap", &drenderer.VisualizeShadowmap);
+
         camera.Update();
         drenderer.Update(camera);
+
+        drenderer.BeginShadowmapStage();
+            drenderer.SetModelMatrix(scale(vec3(0.01f)));
+            drenderer.Draw(sponza);
+        drenderer.EndShadowmapStage();
 
         drenderer.BeginGeometryStage();
             drenderer.SetModelMatrix(scale(vec3(0.01f)));
