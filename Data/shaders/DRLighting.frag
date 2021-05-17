@@ -26,6 +26,7 @@ uniform sampler2D GBuffer[BufferCount];
 uniform sampler2D Shadowmap;
 uniform int VisualizeBuffer;
 uniform bool VisualizeShadowmap;
+uniform bool Tonemap;
 uniform vec3 CameraPosition;
 uniform float Gamma;
 
@@ -155,5 +156,6 @@ void main() {
     Color.rgb = Gamma_FromLinear( Color.rgb );
 
     // Tone mapping (Reinhard tone mapping)
-    Color.rgb /= Color.rgb + vec3(1);
+    if (Tonemap)
+        Color.rgb /= Color.rgb + vec3(1);
 }

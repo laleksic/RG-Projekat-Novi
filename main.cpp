@@ -52,6 +52,7 @@ private:
 public:
     float ParallaxDepth =0.04f;
     float Gamma =2.2f;
+    bool Tonemap =true;
     bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
@@ -178,8 +179,10 @@ public:
         LightingStage->SetUniform("FlashlightCutoffAng", Flashlight.CutoffAng);
         LightingStage->SetUniform("CameraPosition", camera.GetPosition());
         LightingStage->SetUniform("Gamma", Gamma);
+        LightingStage->SetUniform("Tonemap", Tonemap);
         LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
         LightingStage->SetUniform("ShadowmapVPMat", ShadowmapVPMat);
+        
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
@@ -334,6 +337,8 @@ int main(int argc, char** argv) {
             0.0f, 60.0f);
         ImGui::ColorEdit3("Flashlight color", value_ptr(drenderer.Flashlight.Color));
         ImGui::Checkbox("Visualize shadowmap", &drenderer.VisualizeShadowmap);
+        ImGui::SliderFloat("Gamma", &drenderer.Gamma, 1.0f, 2.2f);
+        ImGui::Checkbox("Reinhard Tonemapping", &drenderer.Tonemap);
 
         camera.Update();
         drenderer.Update(camera);
