@@ -29,6 +29,7 @@ uniform bool VisualizeShadowmap;
 uniform bool Tonemap;
 uniform vec3 CameraPosition;
 uniform float Gamma;
+uniform float FogDensity;
 
 in VertexData {
     vec2 TexCoords;
@@ -80,6 +81,24 @@ float CutoffFactor(vec3 wsToLight) {
         cutoffFactor =1 ; // yes
     }
     return cutoffFactor;
+}
+
+// Raymarch volumetric light
+vec3 RaymarchVolumetric(vec3 wsPosition) {
+    vec3 wsToCamera = (CameraPosition-wsPosition);
+    int RAYMARCH_STEPS = 96;
+    vec3 rayStep = wsToCamera / RAYMARCH_STEPS;;
+    vec3 curPos = wsPosition;
+
+    vec3 accum;
+    for (int i=0; i<RAYMARCH_STEPS; ++i){
+        float cutoffFactor = CutoffFactor(normalize(FlashlightPosition-curPos));
+        float shadowFactor = ShadowFactor(curPos);        
+        float attenuation = AttenuateLight(length(FlashlightPosition-curPos));
+        accum += FlashlightColor * cutoffFactor * shadowFactor * attenuation * FogDensity;
+        curPos += rayStep;
+    }
+    return accum;
 }
 
 void main() {
@@ -153,6 +172,8 @@ void main() {
         float shininess = pow(align, 32);
         Color.rgb += specular * lightColor * shininess * attenuation * cutoffFactor * shadowFactor;        
     }
+
+    Color.rgb += RaymarchVolumetric(wsPosition+wsNormal*0.05);
 
     // Gamma correction
     Color.rgb = Gamma_FromLinear( Color.rgb );
