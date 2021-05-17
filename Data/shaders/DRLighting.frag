@@ -280,6 +280,22 @@ void main() {
         Color.rgb += specular * lightColor * shininess * attenuation * cutoffFactor * shadowFactor;        
     }
 
+    {
+        vec4 lsPosition = ShadowmapVPMat * vec4(wsPosition,1);
+        lsPosition.xyz /= lsPosition.w; // Perspective divide
+        float lsFragDepth = (lsPosition.z + 1) / 2;
+        vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
+        const int VPL_COUNT = 40;
+        for (int i=0; i<VPL_COUNT; ++i) {
+            vec2 vplUv = poissonDisk[i];
+            Light vpl;
+            vpl.Position = texture(RSM[RSMPositionBuf], vplUv).rgb;
+            vpl.Color = texture(RSM[RSMFluxBuf], vplUv).rgb;
+            HandlePointLight(wsPosition, wsNormal, wsToCamera, vpl, diffuse, specular, translucency);
+        }
+    }
+
+
     Color.rgb += RaymarchVolumetric(wsPosition+wsNormal*0.05);
 
     // Gamma correction
