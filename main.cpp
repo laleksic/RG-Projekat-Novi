@@ -98,7 +98,7 @@ public:
         for (;buf<DepthBuf; ++buf) {
             LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
         }
-        LightingStage->SetUniform("ShadowMap", buf++);
+        LightingStage->SetUniform("Shadowmap", buf++); // Shadowmap != ShadowMap ... grrr
     }
     void Update(const Camera& camera) {
         if (TheEngine->WasWindowResized()) {
@@ -135,6 +135,20 @@ public:
             // default: cerr << "Fbo ok" << endl;
             #undef TMP
         }
+        fboStatus = glCheckNamedFramebufferStatus(ShadowmapFBO, GL_FRAMEBUFFER);
+        switch (fboStatus) {
+            #define TMP(v) case v: cerr<< #v << endl; abort(); break;
+            TMP(GL_FRAMEBUFFER_UNDEFINED)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER)
+            TMP(GL_FRAMEBUFFER_UNSUPPORTED)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
+            // default: cerr << "Fbo ok" << endl;
+            #undef TMP
+        }        
 
         ivec2 windowSize = TheEngine->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
@@ -164,7 +178,9 @@ public:
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
+        glDeleteTextures(1, &Shadowmap);
         glDeleteFramebuffers(1, &GeometryFBO);
+        glDeleteFramebuffers(1, &ShadowmapFBO);
     }
     void SetModelMatrix(mat4 model) {
         GeometryStage->SetUniform("NormalMat", mat3(transpose(inverse(mat3(model)))));
@@ -184,8 +200,7 @@ public:
         
         glBindFramebuffer(GL_FRAMEBUFFER, ShadowmapFBO);
 
-        ivec2 windowSize = TheEngine->GetWindowSize();
-        glViewport(0,0, windowSize.x, windowSize.y);
+        glViewport(0,0, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
