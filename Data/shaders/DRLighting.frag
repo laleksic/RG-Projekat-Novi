@@ -34,6 +34,7 @@ uniform mat4 ShadowmapVPMat;
 uniform sampler2D GBuffer[BufferCount];
 uniform sampler2D RSM[RSMBufferCount];
 uniform int VisualizeBuffer;
+uniform int VisualizeRSMBuffer;
 uniform bool VisualizeShadowmap;
 uniform bool Tonemap;
 uniform vec3 CameraPosition;
@@ -122,6 +123,9 @@ vec3 RaymarchVolumetric(vec3 wsPosition) {
 void main() {
     Color.rgb = vec3(0);
     Color.a = 1;
+
+    // Color.rgb = texture(RSM[RSMFluxBuf], vertexData.TexCoords).rgb;
+    // return;
     // if (VisualizeShadowmap) {
     //     Color.rgb = vec3(LinearizeDepth(texture2D(Shadowmap, vertexData.TexCoords).x));
     //     return;
@@ -130,6 +134,11 @@ void main() {
         Color.rgb = texture(GBuffer[VisualizeBuffer], vertexData.TexCoords).rgb;
         return;
     }
+    if (VisualizeRSMBuffer >=0 && VisualizeRSMBuffer <RSMBufferCount) {
+        Color.rgb = texture(RSM[VisualizeRSMBuffer], vertexData.TexCoords).rgb;
+        return;
+    }
+
 
     vec3 wsPosition = texture(GBuffer[PositionBuf], vertexData.TexCoords).xyz;
     vec3 wsNormal = texture(GBuffer[NormalBuf], vertexData.TexCoords).xyz;

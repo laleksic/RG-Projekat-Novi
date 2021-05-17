@@ -118,7 +118,7 @@ public:
             2,3,0
         };
         ScreenQuad.UploadToGPU();
-        ShadowmapStage = Load<Shader>("Data/shaders/DepthOnly");
+        ShadowmapStage = Load<Shader>("Data/shaders/RSM");
         ShadowmapStage->SetUniform("DiffuseMap", 0);  
         GeometryStage = Load<Shader>("Data/shaders/DRGeometry");
         GeometryStage->SetUniform("DiffuseMap", 0);  
@@ -135,6 +135,7 @@ public:
             LightingStage->SetUniform("RSM["+to_string(buf)+"]", unit++);
         }
 
+        VisualizeRSMBuffer(-1);
         VisualizeBuffer(-1); // go straight to final render.
     }
     void Update(const Camera& camera) {
@@ -199,6 +200,10 @@ public:
         ShadowmapStage->SetUniform("MVPMat", ShadowmapVPMat);
         ShadowmapStage->SetUniform("ModelMat", mat4(1));
         ShadowmapStage->SetUniform("NormalMat", mat3(1));
+        ShadowmapStage->SetUniform("FlashlightPosition", Flashlight.GetPosition());
+        ShadowmapStage->SetUniform("FlashlightDirection", Flashlight.GetDirection());
+        ShadowmapStage->SetUniform("FlashlightColor", Flashlight.Color);
+        ShadowmapStage->SetUniform("FlashlightCutoffAng", Flashlight.CutoffAng);        
 
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
         GeometryStage->SetUniform("Gamma", Gamma);
@@ -300,6 +305,9 @@ public:
     void VisualizeBuffer(int buf) {
         LightingStage->SetUniform("VisualizeBuffer", buf);
     }
+    void VisualizeRSMBuffer(int buf) {
+        LightingStage->SetUniform("VisualizeRSMBuffer", buf);
+    }    
 };
 
 void RandomizeLights(DeferredRenderer& rend, int lightCount){
@@ -343,7 +351,7 @@ int main(int argc, char** argv) {
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
     RandomizeLights(drenderer, 16);
     drenderer.Flashlight.CutoffAng = radians(45.0f);
-    drenderer.Flashlight.Color = vec3(3,3,3);
+    drenderer.Flashlight.Color = vec3(1,1,1);
 
     camera.Update();
     drenderer.Update(camera); // This has to be called before main loop!!
@@ -357,6 +365,7 @@ int main(int argc, char** argv) {
             0.01f, 0, 0.2f, "%f", 1.0f); 
         #define TMP(v) if (ImGui::Button(#v)) {\
             drenderer.VisualizeBuffer(v);\
+            drenderer.VisualizeRSMBuffer(-1);\
         }
         TMP(DeferredRenderer::PositionBuf);
         TMP(DeferredRenderer::DiffuseBuf);
@@ -364,8 +373,17 @@ int main(int argc, char** argv) {
         TMP(DeferredRenderer::NormalBuf);
         TMP(DeferredRenderer::TranslucencyBuf);
         #undef TMP
+        #define TMP(v) if(ImGui::Button(#v)) {\
+            drenderer.VisualizeRSMBuffer(v);\
+            drenderer.VisualizeBuffer(-1);\
+        }
+        TMP(DeferredRenderer::RSMPositionBuf);
+        TMP(DeferredRenderer::RSMNormalBuf);
+        TMP(DeferredRenderer::RSMFluxBuf);
+        #undef TMP
         if (ImGui::Button("Final render")) {
             drenderer.VisualizeBuffer(-1);
+            drenderer.VisualizeRSMBuffer(-1);
         }
         static int lightCount = 16;
         ImGui::SliderInt("Light count", &lightCount, 0, drenderer.MAX_LIGHTS);
