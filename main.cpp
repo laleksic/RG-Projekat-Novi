@@ -298,6 +298,10 @@ void SyncFlashlightToCamera(DeferredRenderer& rend, Camera& cam) {
     rend.Flashlight.SetYaw( cam.GetYaw());
 }
 
+void RotateFlashlight(DeferredRenderer& rend) {
+    rend.Flashlight.SetYaw(rend.Flashlight.GetYaw()+0.2f);
+}
+
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
     DeferredRenderer drenderer;
@@ -343,6 +347,10 @@ int main(int argc, char** argv) {
             AnimateLights(drenderer);
         static bool syncFlashlightToCamera = true;
         ImGui::Checkbox("Sync flashlight to camera", &syncFlashlightToCamera);
+        static bool rotateFlashlight = false;
+        ImGui::Checkbox("Rotate flashlight", &rotateFlashlight);
+        if (rotateFlashlight)
+            RotateFlashlight(drenderer);
         if (syncFlashlightToCamera)
             SyncFlashlightToCamera(drenderer, camera);
         ImGui::SliderAngle("Flashlight cutoff angle", &drenderer.Flashlight.CutoffAng,
