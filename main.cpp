@@ -1,3 +1,7 @@
+// Sources
+// RSM: https://ericpolman.com/2016/03/17/reflective-shadow-maps/
+// Vol.Light: http://www.alexandre-pestana.com/volumetric-lights/
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "main.hpp"
 
@@ -326,6 +330,10 @@ void SyncFlashlightToCamera(DeferredRenderer& rend, Camera& cam) {
     rend.Flashlight.SetYaw( cam.GetYaw());
 }
 
+void RotateFlashlight(DeferredRenderer& rend) {
+    rend.Flashlight.SetYaw(rend.Flashlight.GetYaw()+0.3f);
+}
+
 int main(int argc, char** argv) {
     TheEngine = make_shared<Engine>();
     DeferredRenderer drenderer;
@@ -371,6 +379,10 @@ int main(int argc, char** argv) {
             AnimateLights(drenderer);
         static bool syncFlashlightToCamera = true;
         ImGui::Checkbox("Sync flashlight to camera", &syncFlashlightToCamera);
+        static bool rotateFlashlight = false;
+        ImGui::Checkbox("Rotate flashlight", &rotateFlashlight);
+        if (rotateFlashlight)
+            RotateFlashlight(drenderer);
         if (syncFlashlightToCamera)
             SyncFlashlightToCamera(drenderer, camera);
         ImGui::SliderAngle("Flashlight cutoff angle", &drenderer.Flashlight.CutoffAng,
