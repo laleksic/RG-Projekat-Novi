@@ -115,7 +115,9 @@ void main() {
             cutoffFactor = 0;
         }
         float shadowFactor;
-        vec4 lsPosition = ShadowmapVPMat * vec4(wsPosition,1);
+        //https://www.gamedev.net/forums/topic/665740-cant-fix-shadow-acne-with-bias/
+        vec3 normalOffset = wsNormal * 0.05f;
+        vec4 lsPosition = ShadowmapVPMat * vec4(wsPosition+normalOffset,1);
         lsPosition.xyz /= lsPosition.w; // Perspective divide
         float lsFragDepth = (lsPosition.z + 1) / 2;
         vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
