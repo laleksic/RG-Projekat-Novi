@@ -7,6 +7,15 @@
 #define TranslucencyBuf 4
 
 #define BufferCount 5
+
+#define RSMPositionBuf 0
+#define RSMNormalBuf 1
+#define RSMFluxBuf 2
+
+#define RSMDepthBuf 3
+
+#define RSMBufferCount 4
+
 #define MAX_LIGHTS 100
 
 struct Light {
@@ -23,7 +32,7 @@ uniform vec3 FlashlightColor;
 uniform float FlashlightCutoffAng;
 uniform mat4 ShadowmapVPMat;
 uniform sampler2D GBuffer[BufferCount];
-uniform sampler2D Shadowmap;
+uniform sampler2D RSM[RSMBufferCount];
 uniform int VisualizeBuffer;
 uniform bool VisualizeShadowmap;
 uniform bool Tonemap;
@@ -72,7 +81,7 @@ float ShadowFactor(vec3 wsPosition){
     lsPosition.xyz /= lsPosition.w; // Perspective divide
     float lsFragDepth = (lsPosition.z + 1) / 2;
     vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
-    float closestDepth = texture(Shadowmap, shadowUv).r;
+    float closestDepth = texture(RSM[RSMDepthBuf], shadowUv).r;
 
     if (closestDepth < lsFragDepth)
         shadowFactor = 0; // in shadow
