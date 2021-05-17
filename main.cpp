@@ -62,6 +62,10 @@ public:
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, 1, &Shadowmap);
         glTextureStorage2D(Shadowmap, 1, GL_DEPTH_COMPONENT16, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
+        glTextureParameteri(Shadowmap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+        glTextureParameteri(Shadowmap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+        vec4 black(0,0,0,1);
+        glTextureParameterfv(Shadowmap, GL_TEXTURE_BORDER_COLOR, value_ptr(black));
         glCreateFramebuffers(1, &ShadowmapFBO);
         glNamedFramebufferTexture(ShadowmapFBO, GL_DEPTH_ATTACHMENT, Shadowmap, 0);
 
