@@ -30,6 +30,7 @@ uniform bool Tonemap;
 uniform vec3 CameraPosition;
 uniform float Gamma;
 uniform float FogDensity;
+uniform int RaymarchSteps;
 
 in VertexData {
     vec2 TexCoords;
@@ -86,12 +87,11 @@ float CutoffFactor(vec3 wsToLight) {
 // Raymarch volumetric light
 vec3 RaymarchVolumetric(vec3 wsPosition) {
     vec3 wsToCamera = (CameraPosition-wsPosition);
-    int RAYMARCH_STEPS = 96;
-    vec3 rayStep = wsToCamera / RAYMARCH_STEPS;;
+    vec3 rayStep = wsToCamera / RaymarchSteps;;
     vec3 curPos = wsPosition;
 
     vec3 accum;
-    for (int i=0; i<RAYMARCH_STEPS; ++i){
+    for (int i=0; i<RaymarchSteps; ++i){
         float cutoffFactor = CutoffFactor(normalize(FlashlightPosition-curPos));
         float shadowFactor = ShadowFactor(curPos);        
         float attenuation = AttenuateLight(length(FlashlightPosition-curPos));

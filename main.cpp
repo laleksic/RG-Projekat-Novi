@@ -53,6 +53,7 @@ public:
     float ParallaxDepth =0.04f;
     float Gamma =2.2f;
     float FogDensity = 0.01f;
+    int RaymarchSteps=48;
     bool Tonemap =true;
     bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
@@ -181,6 +182,7 @@ public:
         LightingStage->SetUniform("CameraPosition", camera.GetPosition());
         LightingStage->SetUniform("Gamma", Gamma);
         LightingStage->SetUniform("FogDensity", FogDensity);
+        LightingStage->SetUniform("RaymarchSteps", RaymarchSteps);
         LightingStage->SetUniform("Tonemap", Tonemap);
         LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
         LightingStage->SetUniform("ShadowmapVPMat", ShadowmapVPMat);
@@ -342,7 +344,8 @@ int main(int argc, char** argv) {
         ImGui::SliderFloat("Gamma", &drenderer.Gamma, 1.0f, 2.2f);
         ImGui::Checkbox("Reinhard Tonemapping", &drenderer.Tonemap);
         ImGui::SliderFloat("Fog Density", &drenderer.FogDensity, 0, 0.01f);
-        
+        ImGui::SliderInt("Raymarch Steps", &drenderer.RaymarchSteps, 16, 96);
+
         camera.Update();
         drenderer.Update(camera);
 
