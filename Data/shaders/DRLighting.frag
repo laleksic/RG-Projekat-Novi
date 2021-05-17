@@ -31,6 +31,7 @@ uniform vec3 CameraPosition;
 uniform float Gamma;
 uniform float FogDensity;
 uniform int RaymarchSteps;
+uniform bool RealisticAttenuation;
 
 in VertexData {
     vec2 TexCoords;
@@ -39,9 +40,17 @@ in VertexData {
 out vec4 Color;
 
 float AttenuateLight(float distanceToLight) {
-    const float constant = 0.0f;//1.0f;
-    const float linear = 0.0f;//0.22f;//0.35f;
-    const float quadratic = 1.0f;//0.20f;//0.44f;
+    float constant, linear, quadratic;
+    if (RealisticAttenuation) {
+        constant = 0.0f;
+        linear = 0.0f;
+        quadratic = 1.0f;
+    } else {
+        constant = 1;
+        linear = 0.22f;
+        quadratic = 0.20f;
+    }
+
     return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
 }
 

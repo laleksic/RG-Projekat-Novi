@@ -54,6 +54,7 @@ public:
     float Gamma =2.2f;
     float FogDensity = 0.01f;
     int RaymarchSteps=48;
+    bool RealisticAttenuation=true;
     bool Tonemap =true;
     bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
@@ -186,6 +187,7 @@ public:
         LightingStage->SetUniform("Tonemap", Tonemap);
         LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
         LightingStage->SetUniform("ShadowmapVPMat", ShadowmapVPMat);
+        LightingStage->SetUniform("RealisticAttenuation", RealisticAttenuation);
         
     }
     ~DeferredRenderer() {
@@ -345,6 +347,7 @@ int main(int argc, char** argv) {
         ImGui::Checkbox("Reinhard Tonemapping", &drenderer.Tonemap);
         ImGui::SliderFloat("Fog Density", &drenderer.FogDensity, 0, 2);
         ImGui::SliderInt("Raymarch Steps", &drenderer.RaymarchSteps, 16, 96);
+        ImGui::Checkbox("Realistic Light Attenuation", &drenderer.RealisticAttenuation);
 
         camera.Update();
         drenderer.Update(camera);
