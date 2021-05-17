@@ -54,6 +54,33 @@ float LinearizeDepth(float depth)
     return (2.0 * zNear) / (zFar + zNear - depth * (zFar - zNear));
 }
 
+float ShadowFactor(vec3 wsPosition){
+    float shadowFactor;
+    //https://www.gamedev.net/forums/topic/665740-cant-fix-shadow-acne-with-bias/
+    vec4 lsPosition = ShadowmapVPMat * vec4(wsPosition,1);
+    lsPosition.xyz /= lsPosition.w; // Perspective divide
+    float lsFragDepth = (lsPosition.z + 1) / 2;
+    vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
+    float closestDepth = texture(Shadowmap, shadowUv).r;
+
+    if (closestDepth < lsFragDepth)
+        shadowFactor = 0; // in shadow
+    else
+        shadowFactor = 1; // lit
+
+    return shadowFactor;
+}
+
+// Are we in the spotlight cone? 
+float CutoffFactor(vec3 wsToLight) {
+    float cutoffFactor = max(0, dot(normalize(FlashlightDirection), -wsToLight));
+    if (cutoffFactor < cos(FlashlightCutoffAng)){
+        cutoffFactor = 0; // no
+    } else {
+        cutoffFactor =1 ; // yes
+    }
+    return cutoffFactor;
+}
 
 void main() {
     Color.rgb = vec3(0);
@@ -111,33 +138,8 @@ void main() {
         wsToLight = normalize(wsToLight);
     
         float attenuation = AttenuateLight(distanceToLight);
-        float cutoffFactor = max(0, dot(normalize(FlashlightDirection), -wsToLight));
-        if (cutoffFactor < cos(FlashlightCutoffAng)){
-            cutoffFactor = 0;
-        }
-        float shadowFactor;
-        //https://www.gamedev.net/forums/topic/665740-cant-fix-shadow-acne-with-bias/
-        vec3 normalOffset = wsNormal * 0.05f;
-        vec4 lsPosition = ShadowmapVPMat * vec4(wsPosition+normalOffset,1);
-        lsPosition.xyz /= lsPosition.w; // Perspective divide
-        float lsFragDepth = (lsPosition.z + 1) / 2;
-        vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
-        float closestDepth = texture(Shadowmap, shadowUv).r;
-
-        // debug
-        // ---
-        if (VisualizeShadowmap) {
-            Color.rgb = vec3(LinearizeDepth(closestDepth));
-            return;
-        }
-        // Color.rgb = lsPosition.xyz;
-        // ---
-        
-        
-        if (closestDepth < lsFragDepth)
-            shadowFactor = 0; // in shadow
-        else
-            shadowFactor = 1; // lit
+        float cutoffFactor = CutoffFactor(wsToLight);
+        float shadowFactor = ShadowFactor(wsPosition+wsNormal*0.05);
 
         // Diffuse
         float lambert = max(0, dot(wsToLight, wsNormal));
