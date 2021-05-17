@@ -156,7 +156,7 @@ public:
         GeometryVPMat = projectionMat * camera.GetViewMatrix();
         GeometryStage->SetUniform("MVPMat", GeometryVPMat);
         GeometryStage->SetUniform("CameraPosition", camera.GetPosition());
-        ShadowmapVPMat = perspective(Flashlight.CutoffAng, 1.0f, 0.1f, 250.0f) * Flashlight.GetViewMatrix();
+        ShadowmapVPMat = perspective(2*Flashlight.CutoffAng, 1.0f, 0.1f, 250.0f) * Flashlight.GetViewMatrix();
         ShadowmapStage->SetUniform("MVPMat", ShadowmapVPMat);
 
         GeometryStage->SetUniform("ParallaxDepth", ParallaxDepth);
