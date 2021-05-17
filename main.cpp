@@ -299,7 +299,7 @@ void SyncFlashlightToCamera(DeferredRenderer& rend, Camera& cam) {
 }
 
 void RotateFlashlight(DeferredRenderer& rend) {
-    rend.Flashlight.SetYaw(rend.Flashlight.GetYaw()+0.2f);
+    rend.Flashlight.SetYaw(rend.Flashlight.GetYaw()+0.3f);
 }
 
 int main(int argc, char** argv) {
