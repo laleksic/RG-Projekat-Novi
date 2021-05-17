@@ -107,6 +107,8 @@ public:
             LightingStage->SetUniform("GBuffer["+to_string(buf)+"]", buf);
         }
         LightingStage->SetUniform("Shadowmap", buf++); // Shadowmap != ShadowMap ... grrr
+
+        VisualizeBuffer(-1); // go straight to final render.
     }
     void Update(const Camera& camera) {
         if (TheEngine->WasWindowResized()) {
