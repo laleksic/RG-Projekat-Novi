@@ -51,11 +51,11 @@ private:
     }    
 public:
     float ParallaxDepth =0.04f;
-    float Gamma =2.2f;
+    float Gamma =1;
     float FogDensity = 0.01f;
     int RaymarchSteps=48;
-    bool RealisticAttenuation=true;
-    bool Tonemap =true;
+    bool RealisticAttenuation=false;
+    bool Tonemap =false;
     bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
