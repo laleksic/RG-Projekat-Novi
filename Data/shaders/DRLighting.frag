@@ -21,6 +21,7 @@ uniform vec3 FlashlightPosition;
 uniform vec3 FlashlightDirection;
 uniform vec3 FlashlightColor;
 uniform float FlashlightCutoffAng;
+uniform mat4 ShadowmapVPMat;
 uniform sampler2D GBuffer[BufferCount];
 uniform sampler2D Shadowmap;
 uniform int VisualizeBuffer;
@@ -45,11 +46,10 @@ vec3 Gamma_ToLinear(vec3 c) {return pow(c,vec3(Gamma));}
 vec3 Gamma_FromLinear(vec3 c) {return pow(c,vec3(1/Gamma));}
 
 //http://glampert.com/2014/01-26/visualizing-the-depth-buffer/
-float LinearizeDepth(in vec2 uv)
+float LinearizeDepth(float depth)
 {
     float zNear = 0.1;//0.5;    // TODO: Replace by the zNear of your perspective projection
     float zFar  = 250.0;//2000.0; // TODO: Replace by the zFar  of your perspective projection
-    float depth = texture2D(Shadowmap, uv).x;
     return (2.0 * zNear) / (zFar + zNear - depth * (zFar - zNear));
 }
 
@@ -57,10 +57,10 @@ float LinearizeDepth(in vec2 uv)
 void main() {
     Color.rgb = vec3(0);
     Color.a = 1;
-    if (VisualizeShadowmap) {
-        Color.rgb = vec3(LinearizeDepth(vertexData.TexCoords));
-        return;
-    }    
+    // if (VisualizeShadowmap) {
+    //     Color.rgb = vec3(LinearizeDepth(texture2D(Shadowmap, vertexData.TexCoords).x));
+    //     return;
+    // }    
     if (VisualizeBuffer >=0 && VisualizeBuffer <BufferCount) {
         Color.rgb = texture(GBuffer[VisualizeBuffer], vertexData.TexCoords).rgb;
         return;
@@ -114,18 +114,39 @@ void main() {
         if (cutoffFactor < cos(FlashlightCutoffAng)){
             cutoffFactor = 0;
         }
+        float shadowFactor;
+        vec4 lsPosition = ShadowmapVPMat * vec4(wsPosition,1);
+        lsPosition.xyz /= lsPosition.w; // Perspective divide
+        float lsFragDepth = (lsPosition.z + 1) / 2;
+        vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
+        float closestDepth = texture(Shadowmap, shadowUv).r;
+
+        // debug
+        // ---
+        if (VisualizeShadowmap) {
+            Color.rgb = vec3(LinearizeDepth(closestDepth));
+            return;
+        }
+        // Color.rgb = lsPosition.xyz;
+        // ---
+        
+        
+        if (closestDepth < lsFragDepth)
+            shadowFactor = 0; // in shadow
+        else
+            shadowFactor = 1; // lit
 
         // Diffuse
         float lambert = max(0, dot(wsToLight, wsNormal));
-        Color.rgb += diffuse * lightColor * lambert * attenuation * cutoffFactor;
+        Color.rgb += diffuse * lightColor * lambert * attenuation * cutoffFactor * shadowFactor;
         float lambertBack = max(0, dot(wsToLight, -wsNormal));
-        Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency * cutoffFactor;
+        Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency * cutoffFactor * shadowFactor;
 
         // Specular
         vec3 halfway = normalize(wsToLight + wsToCamera);
         float align = max(0, dot(halfway, wsNormal));
         float shininess = pow(align, 32);
-        Color.rgb += specular * lightColor * shininess * attenuation * cutoffFactor;        
+        Color.rgb += specular * lightColor * shininess * attenuation * cutoffFactor * shadowFactor;        
     }
 
     // Gamma correction

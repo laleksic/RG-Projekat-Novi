@@ -175,6 +175,7 @@ public:
         LightingStage->SetUniform("CameraPosition", camera.GetPosition());
         LightingStage->SetUniform("Gamma", Gamma);
         LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
+        LightingStage->SetUniform("ShadowmapVPMat", ShadowmapVPMat);
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
