@@ -17,6 +17,41 @@ struct Spotlight: public Camera{
     float CutoffAng;
 };
 
+MeshPtr MakeSpotlightMesh(
+    float halfAngle,
+    float height,
+    int steps
+) {
+    vec3 tip = vec3(0,0,0);
+    //float c = cos(halfAngle);
+    //float s = sin(halfAngle);
+    // c/s == height/radius
+    // radius == (s*height)/c
+    //float r = (s*height)/c;
+    float r = tan(halfAngle)*height;
+    vec3 baseCenter = tip + height * vec3(0,0,-1);
+    vector<vec3> baseVertices;
+    vector<GLuint> indices;
+    float angleStep = radians(360.0f)/steps;
+    for (int i=0; i<steps; ++i) {
+        vec3 offset;
+        offset.x = cos(angleStep*i);
+        offset.y = sin(angleStep*i);
+        vec3 vertex = baseCenter + offset;
+        baseVertices.push_back(vertex);
+        indices.push_back(i);
+        indices.push_back((i+1)%steps);
+        indices.push_back(steps);
+    }
+    
+    MeshPtr cone = make_shared<Mesh>();
+    cone->Positions = baseVertices;
+    cone->Positions.push_back(tip);
+    cone->Elements = indices;
+    cone->UploadToGPU();
+    return cone;
+}
+
 class DeferredRenderer {
 public:
     enum Buffer {
