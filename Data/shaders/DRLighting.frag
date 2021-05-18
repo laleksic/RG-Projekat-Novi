@@ -297,19 +297,21 @@ void main() {
                 AttenuateLight(length(vpl.Position-wsPosition));
             // The normals must be facing each other
             float align = max(0, -dot(wsNormal, vplSurfaceNormal));
+            // Not all light is reflected
+            float refl = 0.5;
 
             vec3 wsToLight = normalize(vpl.Position-wsPosition);
             // Diffuse
             float lambert = max(0, dot(wsToLight, wsNormal));
             Color.rgb += diffuse * vpl.Color * lambert * attenuation * align;
             float lambertBack = max(0, dot(wsToLight, -wsNormal));
-            Color.rgb += diffuse * vpl.Color * lambertBack * attenuation * translucency * align;
+            Color.rgb += diffuse * vpl.Color * lambertBack * attenuation * translucency * align * refl;
 
             // Specular
             vec3 halfway = normalize(wsToLight + wsToCamera);
             float alignSpec = max(0, dot(halfway, wsNormal));
-            float shininess = pow(alignSpec, 32);
-            Color.rgb += specular * vpl.Color * shininess * attenuation * align;
+            float shininess = pow(alignSpec, 8);
+            Color.rgb += specular * vpl.Color * shininess * attenuation * align * refl;
         }
     }
 
