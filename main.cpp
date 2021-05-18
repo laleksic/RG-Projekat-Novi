@@ -361,7 +361,7 @@ int main(int argc, char** argv) {
     FPSCamera camera;
     camera.SetPosition(vec3(0.0f, 2.0f, 2.0f));  
     RandomizeLights(drenderer, 16);
-    drenderer.Flashlight.CutoffAng = radians(45.0f);
+    drenderer.Flashlight.CutoffAng = radians(25.0f);
     drenderer.Flashlight.Color = vec3(1,1,1);
 
     camera.Update();
