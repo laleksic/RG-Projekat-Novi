@@ -15,11 +15,17 @@ add_executable(RG-Projekat
         imgui-1.82/backends/imgui_impl_opengl3.cpp
         )
 set_property(TARGET RG-Projekat PROPERTY CXX_STANDARD 17)
-#target_precompile_headers(RG-Projekat PRIVATE main.hpp)
 find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(assimp REQUIRED)
-target_link_libraries(RG-Projekat glfw glm assimp imm32)
+target_link_libraries(RG-Projekat glfw glm assimp )
+add_compile_definitions(IMGUI_IMPL_OPENGL_LOADER_GLAD)
+if (WIN32)
+    target_link_libraries(RG-Projekat imm32)
+endif ()
+if (UNIX)
+    target_link_libraries(RG-Projekat dl GL)
+endif ()
 
 add_custom_target(DataFolder ALL
         COMMAND ${CMAKE_COMMAND} -E copy_directory
