@@ -375,6 +375,7 @@ void main() {
         const int VPL_COUNT = RSMVPLCount;
         const float samplingRadius = RSMSamplingRadius;
         vec3 indirectLighting = vec3(0);
+        if (dot(normalize(wsPosition-FlashlightPosition), normalize(FlashlightDirection)) > 0)
         for (int i=0; i<VPL_COUNT; ++i) {
             // vec2 vplUv = shadowUv + poissonDisk[i] * samplingRadius;
             vec2 vplUv = shadowUv + importanceSample[i] * samplingRadius;
