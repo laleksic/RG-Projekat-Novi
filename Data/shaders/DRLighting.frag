@@ -279,37 +279,6 @@ vec3 RaymarchVolumetric(vec3 wsPosition) {
     return accum / RaymarchSteps;
 }
 
-void HandlePointLight(
-    in vec3 wsPosition,
-    in vec3 wsNormal,
-    in vec3 wsToCamera,
-    in Light l,
-    // Samples from the various maps used in shading
-    in vec3 diffuse,
-    in vec3 specular,
-    in vec3 translucency
-){
-    vec3 wsLightPosition = l.Position;
-    vec3 lightColor = l.Color;
-    vec3 wsToLight = (wsLightPosition - wsPosition);
-    float distanceToLight = length(wsToLight);
-    wsToLight = normalize(wsToLight);
-
-    float attenuation = AttenuateLight(distanceToLight);
-
-    // Diffuse
-    float lambert = max(0, dot(wsToLight, wsNormal));
-    Color.rgb += diffuse * lightColor * lambert * attenuation;
-    float lambertBack = max(0, dot(wsToLight, -wsNormal));
-    Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency;
-
-    // Specular
-    vec3 halfway = normalize(wsToLight + wsToCamera);
-    float align = max(0, dot(halfway, wsNormal));
-    float shininess = pow(align, 32);
-    Color.rgb += specular * lightColor * shininess * attenuation;
-}
-
 void PointLightStrength(
     in vec3 wsLightPosition,
     in vec3 wsPosition,
@@ -342,13 +311,7 @@ void PointLightStrength(
 void main() {
     Color.rgb = vec3(0);
     Color.a = 1;
-
-    // Color.rgb = texture(RSM[RSMFluxBuf], vertexData.TexCoords).rgb;
-    // return;
-    // if (VisualizeShadowmap) {
-    //     Color.rgb = vec3(LinearizeDepth(texture2D(Shadowmap, vertexData.TexCoords).x));
-    //     return;
-    // }    
+ 
     if (VisualizeBuffer >=0 && VisualizeBuffer <BufferCount) {
         Color.rgb = texture(GBuffer[VisualizeBuffer], vertexData.TexCoords).rgb;
         return;
@@ -357,7 +320,6 @@ void main() {
         Color.rgb = texture(RSM[VisualizeRSMBuffer], vertexData.TexCoords).rgb;
         return;
     }
-
 
     vec3 wsPosition = texture(GBuffer[PositionBuf], vertexData.TexCoords).xyz;
     vec3 wsNormal = texture(GBuffer[NormalBuf], vertexData.TexCoords).xyz;
@@ -372,7 +334,14 @@ void main() {
     Color.rgb += AmbientLight.rgb * diffuse;
 
     for (int i=0; i<LightCount; ++i) {
-        HandlePointLight(wsPosition, wsNormal, wsToCamera, Lights[i], diffuse, specular, translucency);
+        float d, db, s;
+        PointLightStrength(Lights[i].Position, wsPosition,
+            CameraPosition,
+            wsNormal,
+            d, db, s);
+        Color.rgb += d * diffuse * Lights[i].Color;
+        Color.rgb += db * diffuse * Lights[i].Color * translucency;
+        Color.rgb += s * specular * Lights[i].Color;            
     }
 
     // // The flashlight 
@@ -386,18 +355,16 @@ void main() {
         float attenuation = AttenuateLight(distanceToLight);
         float cutoffFactor = CutoffFactor(wsToLight);
         float shadowFactor = ShadowFactor(wsPosition+wsNormal*0.05);
+        float f = cutoffFactor * shadowFactor;
 
-        // Diffuse
-        float lambert = max(0, dot(wsToLight, wsNormal));
-        Color.rgb += diffuse * lightColor * lambert * attenuation * cutoffFactor * shadowFactor;
-        float lambertBack = max(0, dot(wsToLight, -wsNormal));
-        Color.rgb += diffuse * lightColor * lambertBack * attenuation * translucency * cutoffFactor * shadowFactor;
-
-        // Specular
-        vec3 halfway = normalize(wsToLight + wsToCamera);
-        float align = max(0, dot(halfway, wsNormal));
-        float shininess = pow(align, 32);
-        Color.rgb += specular * lightColor * shininess * attenuation * cutoffFactor * shadowFactor;        
+        float d,db,s;
+        PointLightStrength(FlashlightPosition, wsPosition,
+            CameraPosition,
+            wsNormal,
+            d, db, s);
+        Color.rgb += d * diffuse * FlashlightColor * f;
+        Color.rgb += db * diffuse * FlashlightColor * translucency * f;
+        Color.rgb += s * specular * FlashlightColor * f;    
     }
 
     {
@@ -440,7 +407,6 @@ void main() {
             Color.rgb += indirectLighting;
         }
     }
-
 
     Color.rgb += RaymarchVolumetric(wsPosition+wsNormal*0.05);
 
