@@ -295,8 +295,9 @@ void main() {
             vec3 vplSurfaceNormal = texture(RSM[RSMNormalBuf], vplUv).rgb;
             float attenuation =
                 AttenuateLight(length(vpl.Position-FlashlightPosition) + length(vpl.Position-wsPosition));
-            // The normals must be facing each other
-            float align = max(0, -dot(wsNormal, vplSurfaceNormal));
+            // ---The normals must be facing each other---
+            // float align = max(0, -dot(wsNormal, vplSurfaceNormal)); // (why not this??)
+            float align = max(0, dot(wsNormal, vplSurfaceNormal));
             // Not all light is reflected
             float refl = 0.5;
 
