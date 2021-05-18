@@ -17,6 +17,28 @@ struct Spotlight: public Camera{
     float CutoffAng;
 };
 
+MeshPtr MakeScreenQuadMesh() {
+    MeshPtr screenQuad = make_shared<Mesh>();
+    screenQuad->Positions = {
+        vec3(-1,-1,0),
+        vec3(1,-1,0),
+        vec3(1,1,0),
+        vec3(-1,1,0)
+    };
+    screenQuad->TexCoords = {
+        vec2(0,0),
+        vec2(1,0),
+        vec2(1,1),
+        vec2(0,1)
+    };
+    screenQuad->Elements = {
+        0,1,2,
+        2,3,0
+    };
+    screenQuad->UploadToGPU();
+    return screenQuad;
+}
+
 MeshPtr MakeSpotlightMesh(
     float halfAngle,
     float height,
@@ -52,6 +74,89 @@ MeshPtr MakeSpotlightMesh(
     return cone;
 }
 
+class Framebuffer {
+    GLuint FBO;
+    vector<GLuint> Textures;
+    vector<GLenum> Formats;
+    bool MakeDepthBuffer;
+    bool SyncWithWindowSize;
+
+    void CheckStatus() {
+        GLenum fboStatus = glCheckNamedFramebufferStatus(FBO, GL_FRAMEBUFFER);
+        switch (fboStatus) {
+            #define TMP(v) case v: cerr<< #v << endl; abort(); break;
+            TMP(GL_FRAMEBUFFER_UNDEFINED)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER)
+            TMP(GL_FRAMEBUFFER_UNSUPPORTED)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
+            TMP(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
+            // default: cerr << "Fbo ok" << endl;
+            #undef TMP
+        }
+    }
+    void AttachTextures() {
+        int colorAttachCount = Textures.size();
+        if (MakeDepthBuffer) {
+            colorAttachCount -= 1;
+            glNamedFramebufferTexture(FBO, GL_DEPTH_STENCIL_ATTACHMENT, Textures.back(), 0);
+        } 
+
+        vector<GLenum> drawBufs;
+        for (int buf=0; buf<colorAttachCount; ++buf) {
+            glNamedFramebufferTexture(FBO, GL_COLOR_ATTACHMENT0+buf, Textures[buf], 0);
+            drawBufs.push_back(GL_COLOR_ATTACHMENT0+buf);
+        }
+        glNamedFramebufferDrawBuffers(FBO, drawBufs.size(), drawBufs.data());        
+    }
+    void CreateTextures(ivec2 dims) {
+        glCreateTextures(GL_TEXTURE_2D, Textures.size(), &Textures[0]);
+        for (int i=0; i<Textures.size(); ++i)
+            glTextureStorage2D(Textures[i], 1, Formats[i], dims.x, dims.y);        
+    }
+public:
+    Framebuffer(vector<GLenum> formats, bool makeDepthBuffer, bool syncWithWindowSize, int w=1, int h=1) {
+        Formats = formats;
+        MakeDepthBuffer = makeDepthBuffer;
+        SyncWithWindowSize = syncWithWindowSize;
+        if (makeDepthBuffer) {
+            Formats.push_back(GL_DEPTH24_STENCIL8);
+        }
+        Textures.resize(Formats.size());
+        glCreateFramebuffers(1, &FBO);
+        
+        ivec2 dims;
+        if (SyncWithWindowSize) {
+            dims = TheEngine->GetWindowSize();
+        } else {
+            dims = ivec2(w,h);
+        }
+        CreateTextures(dims);
+        AttachTextures();
+        CheckStatus();
+    }
+    ~Framebuffer() {
+        glDeleteTextures(Textures.size(), &Textures[0]);
+        glDeleteFramebuffers(1, &FBO);
+    }
+    void Update() {
+        if (SyncWithWindowSize && TheEngine->WasWindowResized()) {
+            glDeleteTextures(Textures.size(), &Textures[0]);
+            CreateTextures(TheEngine->GetWindowSize());
+            AttachTextures();
+            CheckStatus();
+        }
+    }
+    GLuint GetTexture(int i) { return Textures.at(i); }
+    void Bind() {
+        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+    }
+};
+
+typedef shared_ptr<Framebuffer> FramebufferPtr;
+
 class DeferredRenderer {
 public:
     enum Buffer {
@@ -76,15 +181,11 @@ public:
         RSMBufferCount
     };
 private:
-    GLuint GBuffer[BufferCount];
-    GLuint RSM[RSMBufferCount];
-    GLuint Shadowmap;
-    GLuint ShadowmapFBO;
-    GLuint GeometryFBO;
+    FramebufferPtr GBuffer, RSM;
     ShaderPtr ShadowmapStage;
     ShaderPtr GeometryStage;
     ShaderPtr LightingStage;
-    Mesh ScreenQuad;
+    MeshPtr ScreenQuad;
     mat4 ShadowmapVPMat;
     mat4 GeometryVPMat;
 
@@ -121,47 +222,23 @@ public:
     bool EnableIndirectLighting = true;    
 
     DeferredRenderer() {
-        glCreateTextures(GL_TEXTURE_2D, RSMBufferCount, &RSM[0]);
-        glTextureStorage2D(RSM[RSMDepthBuf], 1, GL_DEPTH_COMPONENT16, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
-        glTextureStorage2D(RSM[RSMPositionBuf], 1, GL_RGBA32F, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
-        glTextureStorage2D(RSM[RSMNormalBuf], 1, GL_RGBA32F, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
-        glTextureStorage2D(RSM[RSMFluxBuf], 1, GL_RGBA8, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
+        RSM = make_shared<Framebuffer>(
+            vector<GLuint>{GL_RGBA32F, GL_RGBA32F, GL_RGBA8},
+            true, false, SHADOWMAP_SIZE, SHADOWMAP_SIZE
+        );
+        GBuffer = make_shared<Framebuffer>(
+            vector<GLuint>{GL_RGBA32F, GL_RGBA8, GL_RGBA8, GL_RGBA32F, GL_RGBA8},
+            true, true
+        );
         for (int buf=0; buf<RSMBufferCount; ++buf){
             vec4 black(0,0,0,1);
-            glTextureParameteri(RSM[buf], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
-            glTextureParameteri(RSM[buf], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
-            glTextureParameterfv(RSM[buf], GL_TEXTURE_BORDER_COLOR, value_ptr(black));
+            glTextureParameteri(RSM->GetTexture(buf), GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+            glTextureParameteri(RSM->GetTexture(buf), GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+            glTextureParameterfv(RSM->GetTexture(buf), GL_TEXTURE_BORDER_COLOR, value_ptr(black));
         }
 
-        glCreateFramebuffers(1, &ShadowmapFBO);
-        vector<GLenum> drawBufs;
-        for (int buf=0; buf<RSMDepthBuf; ++buf) {
-            glNamedFramebufferTexture(ShadowmapFBO, GL_COLOR_ATTACHMENT0+buf, RSM[buf], 0);
-            drawBufs.push_back(GL_COLOR_ATTACHMENT0+buf);
-        }
-        glNamedFramebufferDrawBuffers(ShadowmapFBO, drawBufs.size(), drawBufs.data());        
-        glNamedFramebufferTexture(ShadowmapFBO, GL_DEPTH_ATTACHMENT, RSM[RSMDepthBuf], 0);
+        ScreenQuad = MakeScreenQuadMesh();
 
-        glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
-        glCreateFramebuffers(1, &GeometryFBO);
-
-        ScreenQuad.Positions = {
-            vec3(-1,-1,0),
-            vec3(1,-1,0),
-            vec3(1,1,0),
-            vec3(-1,1,0)
-        };
-        ScreenQuad.TexCoords = {
-            vec2(0,0),
-            vec2(1,0),
-            vec2(1,1),
-            vec2(0,1)
-        };
-        ScreenQuad.Elements = {
-            0,1,2,
-            2,3,0
-        };
-        ScreenQuad.UploadToGPU();
         ShadowmapStage = Load<Shader>("Data/shaders/RSM");
         ShadowmapStage->SetUniform("DiffuseMap", 0);  
         GeometryStage = Load<Shader>("Data/shaders/DRGeometry");
@@ -183,54 +260,8 @@ public:
         VisualizeBuffer(-1); // go straight to final render.
     }
     void Update(const Camera& camera) {
-        if (TheEngine->WasWindowResized()) {
-            glDeleteTextures(BufferCount, &GBuffer[0]);
-            glCreateTextures(GL_TEXTURE_2D, BufferCount, &GBuffer[0]);
-
-            ivec2 dims = TheEngine->GetWindowSize();
-            glTextureStorage2D(GBuffer[PositionBuf], 1, GL_RGBA32F, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[DiffuseBuf], 1, GL_RGB8, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[SpecularBuf], 1, GL_RGB8, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[NormalBuf], 1, GL_RGBA32F, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[TranslucencyBuf], 1, GL_RGB8, dims.x, dims.y);
-            glTextureStorage2D(GBuffer[DepthBuf], 1, GL_DEPTH_COMPONENT16, dims.x, dims.y);
-        }
-        vector<GLenum> drawBufs;
-        for (int buf=0; buf<DepthBuf; ++buf) {
-            glNamedFramebufferTexture(GeometryFBO, GL_COLOR_ATTACHMENT0+buf, GBuffer[buf], 0);
-            drawBufs.push_back(GL_COLOR_ATTACHMENT0+buf);
-        }
-        glNamedFramebufferTexture(GeometryFBO, GL_DEPTH_ATTACHMENT, GBuffer[DepthBuf], 0);
-        glNamedFramebufferDrawBuffers(GeometryFBO, drawBufs.size(), drawBufs.data());
-
-        GLenum fboStatus = glCheckNamedFramebufferStatus(GeometryFBO, GL_FRAMEBUFFER);
-        switch (fboStatus) {
-            #define TMP(v) case v: cerr<< #v << endl; abort(); break;
-            TMP(GL_FRAMEBUFFER_UNDEFINED)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER)
-            TMP(GL_FRAMEBUFFER_UNSUPPORTED)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
-            // default: cerr << "Fbo ok" << endl;
-            #undef TMP
-        }
-        fboStatus = glCheckNamedFramebufferStatus(ShadowmapFBO, GL_FRAMEBUFFER);
-        switch (fboStatus) {
-            #define TMP(v) case v: cerr<< #v << endl; abort(); break;
-            TMP(GL_FRAMEBUFFER_UNDEFINED)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER)
-            TMP(GL_FRAMEBUFFER_UNSUPPORTED)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE)
-            TMP(GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS)
-            // default: cerr << "Fbo ok" << endl;
-            #undef TMP
-        }        
+        GBuffer->Update();
+        RSM->Update();
 
         ivec2 windowSize = TheEngine->GetWindowSize();
         float aspectRatio = (float)windowSize.x / windowSize.y;
@@ -278,12 +309,6 @@ public:
         LightingStage->SetUniform("VisualizeIndirectLighting", VisualizeIndirectLighting);
         LightingStage->SetUniform("EnableIndirectLighting", EnableIndirectLighting);
     }
-    ~DeferredRenderer() {
-        glDeleteTextures(BufferCount, &GBuffer[0]);
-        glDeleteTextures(1, &Shadowmap);
-        glDeleteFramebuffers(1, &GeometryFBO);
-        glDeleteFramebuffers(1, &ShadowmapFBO);
-    }
     void SetModelMatrix(mat4 model) {
         mat3 normalMat = mat3(transpose(inverse(mat3(model))));
         GeometryStage->SetUniform("NormalMat", normalMat);
@@ -303,7 +328,7 @@ public:
     void BeginShadowmapStage() {
         SetModelMatrix(mat4(1.0f));
         
-        glBindFramebuffer(GL_FRAMEBUFFER, ShadowmapFBO);
+        RSM->Bind();
 
         glViewport(0,0, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -318,7 +343,7 @@ public:
     void BeginGeometryStage() {
         SetModelMatrix(mat4(1.0f));
         
-        glBindFramebuffer(GL_FRAMEBUFFER, GeometryFBO);
+        GBuffer->Bind();
 
         ivec2 windowSize = TheEngine->GetWindowSize();
         glViewport(0,0, windowSize.x, windowSize.y);
@@ -345,12 +370,12 @@ public:
 
         int unit=0;
         for (int buf=0; buf<DepthBuf; ++buf) {
-            glBindTextureUnit(unit++, GBuffer[buf]);
+            glBindTextureUnit(unit++, GBuffer->GetTexture(buf));
         }
         for (int buf=0; buf<RSMBufferCount; ++buf) {
-            glBindTextureUnit(unit++, RSM[buf]);
+            glBindTextureUnit(unit++, RSM->GetTexture(buf));
         }
-        ScreenQuad.Draw();
+        ScreenQuad->Draw();
     }
     void VisualizeBuffer(int buf) {
         LightingStage->SetUniform("VisualizeBuffer", buf);
