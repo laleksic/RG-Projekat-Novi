@@ -77,6 +77,9 @@ public:
     const int MAX_LIGHTS = 100; // Keep in sync with shader!
     const int SHADOWMAP_SIZE = 512;
     Spotlight Flashlight;
+    float RSMSamplingRadius=0.1;
+    int RSMVPLCount=64;
+    float RSMReflectionFact=0.5;
 
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, RSMBufferCount, &RSM[0]);
@@ -228,7 +231,9 @@ public:
         LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
         LightingStage->SetUniform("ShadowmapVPMat", ShadowmapVPMat);
         LightingStage->SetUniform("RealisticAttenuation", RealisticAttenuation);
-        
+        LightingStage->SetUniform("RSMSamplingRadius", (float)RSMSamplingRadius);
+        LightingStage->SetUniform("RSMVPLCount", RSMVPLCount);
+        LightingStage->SetUniform("RSMReflectionFact", RSMReflectionFact);
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
@@ -414,6 +419,9 @@ int main(int argc, char** argv) {
         ImGui::SliderFloat("Fog Density", &drenderer.FogDensity, 0, 2);
         ImGui::SliderInt("Raymarch Steps", &drenderer.RaymarchSteps, 16, 96);
         ImGui::Checkbox("Realistic Light Attenuation", &drenderer.RealisticAttenuation);
+        ImGui::SliderFloat("Sampling Radius", &drenderer.RSMSamplingRadius, 0, 1);
+        ImGui::SliderFloat("Reflection Factor", &drenderer.RSMReflectionFact, 0, 1);
+        ImGui::SliderInt("VPL Count", &drenderer.RSMVPLCount, 0, 64);
 
         camera.Update();
         drenderer.Update(camera);

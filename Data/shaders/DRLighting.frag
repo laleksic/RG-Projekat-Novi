@@ -42,6 +42,9 @@ uniform float Gamma;
 uniform float FogDensity;
 uniform int RaymarchSteps;
 uniform bool RealisticAttenuation;
+uniform float RSMSamplingRadius;
+uniform float RSMReflectionFact;
+uniform int RSMVPLCount;
 
 in VertexData {
     vec2 TexCoords;
@@ -285,8 +288,8 @@ void main() {
         lsPosition.xyz /= lsPosition.w; // Perspective divide
         float lsFragDepth = (lsPosition.z + 1) / 2;
         vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
-        const int VPL_COUNT = 64;
-        const float samplingRadius = 0.1f;
+        const int VPL_COUNT = RSMVPLCount;
+        const float samplingRadius = RSMSamplingRadius;
         for (int i=0; i<VPL_COUNT; ++i) {
             vec2 vplUv = shadowUv + poissonDisk[i] * samplingRadius;
             Light vpl;
@@ -299,12 +302,12 @@ void main() {
             // float align = max(0, -dot(wsNormal, vplSurfaceNormal)); // (why not this??)
             float align = max(0, dot(wsNormal, vplSurfaceNormal));
             // Not all light is reflected
-            float refl = 0.5;
+            float refl = RSMReflectionFact;
 
             vec3 wsToLight = normalize(vpl.Position-wsPosition);
             // Diffuse
             float lambert = max(0, dot(wsToLight, wsNormal));
-            Color.rgb += diffuse * vpl.Color * lambert * attenuation * align;
+            Color.rgb += diffuse * vpl.Color * lambert * attenuation * align * refl;
             float lambertBack = max(0, dot(wsToLight, -wsNormal));
             Color.rgb += diffuse * vpl.Color * lambertBack * attenuation * translucency * align * refl;
 
