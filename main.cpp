@@ -66,11 +66,11 @@ private:
     }    
 public:
     float ParallaxDepth =0.04f;
-    float Gamma =1;
+    float Gamma =2.2;
     float FogDensity = 0.01f;
     int RaymarchSteps=48;
-    bool RealisticAttenuation=false;
-    bool Tonemap =false;
+    bool RealisticAttenuation=true;
+    bool Tonemap =true;
     bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
     vector<Light> Lights;
@@ -80,6 +80,8 @@ public:
     float RSMSamplingRadius=0.1;
     int RSMVPLCount=64;
     float RSMReflectionFact=0.5;
+    bool VisualizeIndirectLighting = false;
+    bool EnableIndirectLighting = true;    
 
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, RSMBufferCount, &RSM[0]);
@@ -234,6 +236,8 @@ public:
         LightingStage->SetUniform("RSMSamplingRadius", (float)RSMSamplingRadius);
         LightingStage->SetUniform("RSMVPLCount", RSMVPLCount);
         LightingStage->SetUniform("RSMReflectionFact", RSMReflectionFact);
+        LightingStage->SetUniform("VisualizeIndirectLighting", VisualizeIndirectLighting);
+        LightingStage->SetUniform("EnableIndirectLighting", EnableIndirectLighting);
     }
     ~DeferredRenderer() {
         glDeleteTextures(BufferCount, &GBuffer[0]);
@@ -422,6 +426,8 @@ int main(int argc, char** argv) {
         ImGui::SliderFloat("Sampling Radius", &drenderer.RSMSamplingRadius, 0, 1);
         ImGui::SliderFloat("Reflection Factor", &drenderer.RSMReflectionFact, 0, 1);
         ImGui::SliderInt("VPL Count", &drenderer.RSMVPLCount, 0, 64);
+        ImGui::Checkbox("Enable Indirect Light", &drenderer.EnableIndirectLighting);
+        ImGui::Checkbox("Visualize Just Indirect Light", &drenderer.VisualizeIndirectLighting);
 
         camera.Update();
         drenderer.Update(camera);

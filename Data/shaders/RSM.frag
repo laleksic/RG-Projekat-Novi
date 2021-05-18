@@ -34,5 +34,5 @@ void main() {
     
     
     float cutoffFactor = CutoffFactor(normalize(FlashlightPosition-wsPosition));
-    RSMFluxBuf.rgb = cutoffFactor * texture(DiffuseMap,texCoords).rgb * FlashlightColor;
+    RSMFluxBuf.rgb = cutoffFactor * texture(DiffuseMap,texCoords).rgb;
 }

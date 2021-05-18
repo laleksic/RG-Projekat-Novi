@@ -45,6 +45,8 @@ uniform bool RealisticAttenuation;
 uniform float RSMSamplingRadius;
 uniform float RSMReflectionFact;
 uniform int RSMVPLCount;
+uniform bool VisualizeIndirectLighting;
+uniform bool EnableIndirectLighting;
 
 in VertexData {
     vec2 TexCoords;
@@ -222,6 +224,35 @@ void HandlePointLight(
     Color.rgb += specular * lightColor * shininess * attenuation;
 }
 
+void PointLightStrength(
+    in vec3 wsLightPosition,
+    in vec3 wsPosition,
+    in vec3 wsCameraPosition,
+    in vec3 wsNormal,
+    out float diffuseStrength,
+    out float diffuseBackStrength,
+    out float specularStrength
+) {
+    vec3 wsToCamera = normalize(wsCameraPosition-wsPosition);
+    vec3 wsToLight = (wsLightPosition - wsPosition);
+    float distanceToLight = length(wsToLight);
+    wsToLight = normalize(wsToLight);
+
+    float attenuation = AttenuateLight(distanceToLight);
+
+    // Diffuse
+    float lambert = max(0, dot(wsToLight, wsNormal));
+    diffuseStrength= lambert * attenuation;
+    float lambertBack = max(0, dot(wsToLight, -wsNormal));
+    diffuseBackStrength= lambertBack * attenuation;
+
+    // Specular
+    vec3 halfway = normalize(wsToLight + wsToCamera);
+    float align = max(0, dot(halfway, wsNormal));
+    float shininess = pow(align, 32);
+    specularStrength= shininess * attenuation;   
+}
+
 void main() {
     Color.rgb = vec3(0);
     Color.a = 1;
@@ -248,7 +279,7 @@ void main() {
     vec3 diffuse = texture(GBuffer[DiffuseBuf], vertexData.TexCoords).rgb;
     vec3 translucency = texture(GBuffer[TranslucencyBuf], vertexData.TexCoords).rgb;
 
-    vec3 wsToCamera = CameraPosition - wsPosition;
+    vec3 wsToCamera = normalize(CameraPosition - wsPosition);
 
     // Accumulate the various lights
     // (A global ambient light)
@@ -290,32 +321,36 @@ void main() {
         vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
         const int VPL_COUNT = RSMVPLCount;
         const float samplingRadius = RSMSamplingRadius;
+        vec3 indirectLighting = vec3(0);
         for (int i=0; i<VPL_COUNT; ++i) {
             vec2 vplUv = shadowUv + poissonDisk[i] * samplingRadius;
             Light vpl;
             vpl.Position = texture(RSM[RSMPositionBuf], vplUv).rgb;
             vpl.Color = texture(RSM[RSMFluxBuf], vplUv).rgb;
             vec3 vplSurfaceNormal = texture(RSM[RSMNormalBuf], vplUv).rgb;
-            float attenuation =
-                AttenuateLight(length(vpl.Position-FlashlightPosition) + length(vpl.Position-wsPosition));
-            // ---The normals must be facing each other---
-            // float align = max(0, -dot(wsNormal, vplSurfaceNormal)); // (why not this??)
-            float align = max(0, dot(wsNormal, vplSurfaceNormal));
-            // Not all light is reflected
-            float refl = RSMReflectionFact;
+            float surfOrientation = max(0, -dot(wsNormal, vplSurfaceNormal)); // (why not this??)
 
-            vec3 wsToLight = normalize(vpl.Position-wsPosition);
-            // Diffuse
-            float lambert = max(0, dot(wsToLight, wsNormal));
-            Color.rgb += diffuse * vpl.Color * lambert * attenuation * align * refl;
-            float lambertBack = max(0, dot(wsToLight, -wsNormal));
-            Color.rgb += diffuse * vpl.Color * lambertBack * attenuation * translucency * align * refl;
+            float d, db, s;
+            PointLightStrength(FlashlightPosition, vpl.Position, 
+                CameraPosition,
+                vplSurfaceNormal,
+                d, db, s);
+            vpl.Color = d * vpl.Color * FlashlightColor * RSMReflectionFact;
 
-            // Specular
-            vec3 halfway = normalize(wsToLight + wsToCamera);
-            float alignSpec = max(0, dot(halfway, wsNormal));
-            float shininess = pow(alignSpec, 8);
-            Color.rgb += specular * vpl.Color * shininess * attenuation * align * refl;
+            PointLightStrength(vpl.Position, wsPosition,
+                CameraPosition,
+                wsNormal,
+                d, db, s);
+            indirectLighting.rgb += d * diffuse * vpl.Color * surfOrientation;
+            indirectLighting.rgb += db * diffuse * vpl.Color * translucency * surfOrientation;
+            indirectLighting.rgb += s * specular * vpl.Color * surfOrientation;
+        }
+        if (VisualizeIndirectLighting) {
+            Color.rgb = indirectLighting;
+            return;
+        }
+        if (EnableIndirectLighting) {
+            Color.rgb += indirectLighting;
         }
     }
 
