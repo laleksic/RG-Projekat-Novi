@@ -69,7 +69,9 @@ public:
     float Gamma =2.2;
     float FogDensity = 0.01f;
     int RaymarchSteps=48;
-    bool RealisticAttenuation=true;
+    float AttenConst = 0;
+    float AttenLin = 0;
+    float AttenQuad = 1;
     bool Tonemap =true;
     bool VisualizeShadowmap = false;
     vec3 AmbientLight = vec3(1);
@@ -232,7 +234,9 @@ public:
         LightingStage->SetUniform("Tonemap", Tonemap);
         LightingStage->SetUniform("VisualizeShadowmap", VisualizeShadowmap);
         LightingStage->SetUniform("ShadowmapVPMat", ShadowmapVPMat);
-        LightingStage->SetUniform("RealisticAttenuation", RealisticAttenuation);
+        LightingStage->SetUniform("AttenConst", AttenConst);
+        LightingStage->SetUniform("AttenLin", AttenLin);
+        LightingStage->SetUniform("AttenQuad", AttenQuad);
         LightingStage->SetUniform("RSMSamplingRadius", (float)RSMSamplingRadius);
         LightingStage->SetUniform("RSMVPLCount", RSMVPLCount);
         LightingStage->SetUniform("RSMReflectionFact", RSMReflectionFact);
@@ -422,7 +426,9 @@ int main(int argc, char** argv) {
         ImGui::Checkbox("Reinhard Tonemapping", &drenderer.Tonemap);
         ImGui::SliderFloat("Fog Density", &drenderer.FogDensity, 0, 2);
         ImGui::SliderInt("Raymarch Steps", &drenderer.RaymarchSteps, 16, 96);
-        ImGui::Checkbox("Realistic Light Attenuation", &drenderer.RealisticAttenuation);
+        ImGui::SliderFloat("Atten Const", &drenderer.AttenConst, 0, 1);
+        ImGui::SliderFloat("Atten Linear", &drenderer.AttenLin, 0, 1);
+        ImGui::SliderFloat("Atten Quadratic", &drenderer.AttenQuad, 0, 1);
         ImGui::SliderFloat("Sampling Radius", &drenderer.RSMSamplingRadius, 0, 1);
         ImGui::SliderFloat("Reflection Factor", &drenderer.RSMReflectionFact, 0, 1);
         ImGui::SliderInt("VPL Count", &drenderer.RSMVPLCount, 0, 64);

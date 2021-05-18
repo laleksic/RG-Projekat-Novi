@@ -41,7 +41,9 @@ uniform vec3 CameraPosition;
 uniform float Gamma;
 uniform float FogDensity;
 uniform int RaymarchSteps;
-uniform bool RealisticAttenuation;
+uniform float AttenConst;
+uniform float AttenLin;
+uniform float AttenQuad;
 uniform float RSMSamplingRadius;
 uniform float RSMReflectionFact;
 uniform int RSMVPLCount;
@@ -55,18 +57,7 @@ in VertexData {
 out vec4 Color;
 
 float AttenuateLight(float distanceToLight) {
-    float constant, linear, quadratic;
-    if (RealisticAttenuation) {
-        constant = 0.0f;
-        linear = 0.0f;
-        quadratic = 1.0f;
-    } else {
-        constant = 1;
-        linear = 0.22f;
-        quadratic = 0.20f;
-    }
-
-    return 1/(constant + linear*distanceToLight + quadratic*distanceToLight*distanceToLight);
+    return 1/(AttenConst + AttenLin*distanceToLight + AttenQuad*distanceToLight*distanceToLight);
 }
 
 vec3 Gamma_ToLinear(vec3 c) {return pow(c,vec3(Gamma));}
