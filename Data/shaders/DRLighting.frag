@@ -286,15 +286,15 @@ void main() {
         float lsFragDepth = (lsPosition.z + 1) / 2;
         vec2 shadowUv = (lsPosition.xy + vec2(1)) / 2;
         const int VPL_COUNT = 64;
+        const float samplingRadius = 0.1f;
         for (int i=0; i<VPL_COUNT; ++i) {
-            vec2 vplUv = poissonDisk[i];
+            vec2 vplUv = shadowUv + poissonDisk[i] * samplingRadius;
             Light vpl;
             vpl.Position = texture(RSM[RSMPositionBuf], vplUv).rgb;
             vpl.Color = texture(RSM[RSMFluxBuf], vplUv).rgb;
             vec3 vplSurfaceNormal = texture(RSM[RSMNormalBuf], vplUv).rgb;
             float attenuation =
-                AttenuateLight(length(vpl.Position-FlashlightPosition)) *
-                AttenuateLight(length(vpl.Position-wsPosition));
+                AttenuateLight(length(vpl.Position-FlashlightPosition) + length(vpl.Position-wsPosition));
             // The normals must be facing each other
             float align = max(0, -dot(wsNormal, vplSurfaceNormal));
             // Not all light is reflected

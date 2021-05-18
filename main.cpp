@@ -81,13 +81,15 @@ public:
     DeferredRenderer() {
         glCreateTextures(GL_TEXTURE_2D, RSMBufferCount, &RSM[0]);
         glTextureStorage2D(RSM[RSMDepthBuf], 1, GL_DEPTH_COMPONENT16, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
-        glTextureParameteri(RSM[RSMDepthBuf], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
-        glTextureParameteri(RSM[RSMDepthBuf], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
-        vec4 black(0,0,0,1);
-        glTextureParameterfv(RSM[RSMDepthBuf], GL_TEXTURE_BORDER_COLOR, value_ptr(black));
         glTextureStorage2D(RSM[RSMPositionBuf], 1, GL_RGBA32F, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
         glTextureStorage2D(RSM[RSMNormalBuf], 1, GL_RGBA32F, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
         glTextureStorage2D(RSM[RSMFluxBuf], 1, GL_RGBA8, SHADOWMAP_SIZE, SHADOWMAP_SIZE);
+        for (int buf=0; buf<RSMBufferCount; ++buf){
+            vec4 black(0,0,0,1);
+            glTextureParameteri(RSM[buf], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+            glTextureParameteri(RSM[buf], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+            glTextureParameterfv(RSM[buf], GL_TEXTURE_BORDER_COLOR, value_ptr(black));
+        }
 
         glCreateFramebuffers(1, &ShadowmapFBO);
         vector<GLenum> drawBufs;
