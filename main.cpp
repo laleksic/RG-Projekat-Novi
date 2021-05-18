@@ -431,7 +431,7 @@ int main(int argc, char** argv) {
         ImGui::SliderFloat("Atten Quadratic", &drenderer.AttenQuad, 0, 1);
         ImGui::SliderFloat("Sampling Radius", &drenderer.RSMSamplingRadius, 0, 1);
         ImGui::SliderFloat("Reflection Factor", &drenderer.RSMReflectionFact, 0, 1);
-        ImGui::SliderInt("VPL Count", &drenderer.RSMVPLCount, 0, 64);
+        ImGui::SliderInt("VPL Count", &drenderer.RSMVPLCount, 0, 128);
         ImGui::Checkbox("Enable Indirect Light", &drenderer.EnableIndirectLighting);
         ImGui::Checkbox("Visualize Just Indirect Light", &drenderer.VisualizeIndirectLighting);
 
