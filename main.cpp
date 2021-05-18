@@ -411,6 +411,7 @@ int main(int argc, char** argv) {
     ModelPtr sponza = Load<Model>("Data/models/sponza.obj");
 
     while (TheEngine->Run()) {
+        { // Imgui widgets...
         ImGui::DragFloat("Parallax depth",&drenderer.ParallaxDepth,
             0.01f, 0, 0.2f, "%f", 1.0f); 
         #define TMP(v) if (ImGui::Button(#v)) {\
@@ -469,6 +470,7 @@ int main(int argc, char** argv) {
         ImGui::SliderInt("VPL Count", &drenderer.RSMVPLCount, 0, 128);
         ImGui::Checkbox("Enable Indirect Light", &drenderer.EnableIndirectLighting);
         ImGui::Checkbox("Visualize Just Indirect Light", &drenderer.VisualizeIndirectLighting);
+        }
 
         camera.Update();
         drenderer.Update(camera);
